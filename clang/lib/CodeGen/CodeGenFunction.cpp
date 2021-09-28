@@ -45,8 +45,11 @@
 #include "llvm/Support/CRC.h"
 #include "llvm/Transforms/Scalar/LowerExpectIntrinsic.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
+#include <iostream>
+
 using namespace clang;
 using namespace CodeGen;
+using namespace std;
 
 /// shouldEmitLifetimeMarkers - Decide whether we need emit the life-time
 /// markers.
@@ -1523,12 +1526,16 @@ bool CodeGenFunction::isInstrumentedCondition(const Expr *C) {
 /// logical operators.
 void CodeGenFunction::EmitBranchToCounterBlock(
     const Expr *Cond, BinaryOperator::Opcode LOp, llvm::BasicBlock *TrueBlock,
-    llvm::BasicBlock *FalseBlock, uint64_t TrueCount /* = 0 */,
+    llvm::BasicBlock *FalseBlock, 
+    std::string trace,
+    uint64_t TrueCount /* = 0 */,
     Stmt::Likelihood LH /* =None */, const Expr *CntrIdx /* = nullptr */) {
   // If not instrumenting, just emit a branch.
   bool InstrumentRegions = CGM.getCodeGenOpts().hasProfileClangInstr();
   if (!InstrumentRegions || !isInstrumentedCondition(Cond))
-    return EmitBranchOnBoolExpr(Cond, TrueBlock, FalseBlock, TrueCount, LH);
+    // MODIFIED: RHO@CODEMIND -------->  
+    return EmitBranchOnBoolExpr(Cond, TrueBlock, FalseBlock, TrueCount, trace, LH);
+    // <-------------------------------
 
   llvm::BasicBlock *ThenBlock = NULL;
   llvm::BasicBlock *ElseBlock = NULL;
@@ -1576,8 +1583,10 @@ void CodeGenFunction::EmitBranchToCounterBlock(
   }
 
   // Emit Branch based on condition.
-  EmitBranchOnBoolExpr(Cond, ThenBlock, ElseBlock, TrueCount, LH);
-
+  // MODIFIED: RHO@CODEMIND -------->
+  EmitBranchOnBoolExpr(Cond, ThenBlock, ElseBlock, TrueCount, trace, LH);
+  // <-------------------------------
+  
   // Emit the block containing the counter increment(s).
   EmitBlock(CounterIncrBlock);
 
@@ -1596,6 +1605,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                                            llvm::BasicBlock *TrueBlock,
                                            llvm::BasicBlock *FalseBlock,
                                            uint64_t TrueCount,
+                                           std::string trace,
                                            Stmt::Likelihood LH) {
   Cond = Cond->IgnoreParens();
 
@@ -1610,8 +1620,11 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
           ConstantBool) {
         // br(1 && X) -> br(X).
         incrementProfileCounter(CondBOp);
+
+        // MODIFIED: RHO@CODEMIND -------->
         return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd, TrueBlock,
-                                        FalseBlock, TrueCount, LH);
+                                        FalseBlock, trace.empty()?trace:trace + ".and1", TrueCount, LH);
+        // <-------------------------------
       }
 
       // If we have "X && 1", simplify the code to use an uncond branch.
@@ -1619,8 +1632,11 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       if (ConstantFoldsToSimpleInteger(CondBOp->getRHS(), ConstantBool) &&
           ConstantBool) {
         // br(X && 1) -> br(X).
+
+        // MODIFIED: RHO@CODEMIND -------->
         return EmitBranchToCounterBlock(CondBOp->getLHS(), BO_LAnd, TrueBlock,
-                                        FalseBlock, TrueCount, LH, CondBOp);
+                                        FalseBlock, trace.empty()?trace:trace + ".and2", TrueCount, LH, CondBOp);
+        // <-------------------------------
       }
 
       // Emit the LHS as a conditional.  If the LHS conditional is false, we
@@ -1636,9 +1652,16 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // Propagate the likelihood attribute like __builtin_expect
         // __builtin_expect(X && Y, 1) -> X and Y are likely
         // __builtin_expect(X && Y, 0) -> only Y is unlikely
-        EmitBranchOnBoolExpr(CondBOp->getLHS(), LHSTrue, FalseBlock, RHSCount,
-                             LH == Stmt::LH_Unlikely ? Stmt::LH_None : LH);
+
+        // MODIFIED: RHO@CODEMIND -------->
+        EmitBranchOnBoolExpr(CondBOp->getLHS(), LHSTrue, FalseBlock, RHSCount, trace.empty()?trace:trace + ".and3", LH == Stmt::LH_Unlikely ? Stmt::LH_None : LH);
         EmitBlock(LHSTrue);
+        if(!trace.empty() && !LHSTrue->empty()) {
+          cout << ".lhstt" << endl;
+          auto lhs_meta = LHSTrue->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
+          LHSTrue->begin()->setMetadata((trace + ".lhstt").c_str(), lhs_meta);
+        }
+        // <-------------------------------
       }
 
       incrementProfileCounter(CondBOp);
@@ -1646,8 +1669,9 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
 
       // Any temporaries created here are conditional.
       eval.begin(*this);
-      EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd, TrueBlock,
-                               FalseBlock, TrueCount, LH);
+      // MODIFIED: RHO@CODEMIND -------->
+      EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd, TrueBlock, FalseBlock, trace.empty()?trace:trace + ".and4", TrueCount, LH);
+      // <-------------------------------
       eval.end(*this);
 
       return;
@@ -1661,8 +1685,9 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
           !ConstantBool) {
         // br(0 || X) -> br(X).
         incrementProfileCounter(CondBOp);
-        return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr, TrueBlock,
-                                        FalseBlock, TrueCount, LH);
+        // MODIFIED: RHO@CODEMIND -------->
+        return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr, TrueBlock, FalseBlock, trace.empty()?trace:trace + ".or1", TrueCount, LH);
+        // <-------------------------------
       }
 
       // If we have "X || 0", simplify the code to use an uncond branch.
@@ -1670,8 +1695,10 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       if (ConstantFoldsToSimpleInteger(CondBOp->getRHS(), ConstantBool) &&
           !ConstantBool) {
         // br(X || 0) -> br(X).
+        // MODIFIED: RHO@CODEMIND -------->
         return EmitBranchToCounterBlock(CondBOp->getLHS(), BO_LOr, TrueBlock,
-                                        FalseBlock, TrueCount, LH, CondBOp);
+                                        FalseBlock, trace.empty()?trace:trace + ".or2", TrueCount, LH, CondBOp);
+        // <-------------------------------
       }
 
       // Emit the LHS as a conditional.  If the LHS conditional is true, we
@@ -1690,9 +1717,17 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // __builtin_expect(X || Y, 1) -> only Y is likely
         // __builtin_expect(X || Y, 0) -> both X and Y are unlikely
         ApplyDebugLocation DL(*this, Cond);
+        // MODIFIED: RHO@CODEMIND -------->
         EmitBranchOnBoolExpr(CondBOp->getLHS(), TrueBlock, LHSFalse, LHSCount,
+                             trace.empty()?trace:trace + ".or3",
                              LH == Stmt::LH_Likely ? Stmt::LH_None : LH);
-        EmitBlock(LHSFalse);
+        EmitBlock(LHSFalse);                     
+        if(!trace.empty() && !LHSFalse->empty()) {
+          cout << ".lhsff" << endl;
+          auto lhs_meta = LHSFalse->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
+          LHSFalse->begin()->setMetadata((trace + ".lhsff").c_str(), lhs_meta);
+        }
+        // <-------------------------------
       }
 
       incrementProfileCounter(CondBOp);
@@ -1700,9 +1735,11 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
 
       // Any temporaries created here are conditional.
       eval.begin(*this);
+      // MODIFIED: RHO@CODEMIND -------->
       EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr, TrueBlock, FalseBlock,
+                               trace.empty()?trace:trace + ".or4",
                                RHSCount, LH);
-
+      // <-------------------------------
       eval.end(*this);
 
       return;
@@ -1717,8 +1754,10 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       // The values of the enum are chosen to make this negation possible.
       LH = static_cast<Stmt::Likelihood>(-LH);
       // Negate the condition and swap the destination blocks.
+      // MODIFIED: RHO@CODEMIND -------->
       return EmitBranchOnBoolExpr(CondUOp->getSubExpr(), FalseBlock, TrueBlock,
-                                  FalseCount, LH);
+                                  FalseCount, trace.empty()?trace:trace + ".neg", LH);
+      // <-------------------------------
     }
   }
 
@@ -1730,8 +1769,10 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     // The ConditionalOperator itself has no likelihood information for its
     // true and false branches. This matches the behavior of __builtin_expect.
     ConditionalEvaluation cond(*this);
+    // MODIFIED: RHO@CODEMIND -------->
     EmitBranchOnBoolExpr(CondOp->getCond(), LHSBlock, RHSBlock,
-                         getProfileCount(CondOp), Stmt::LH_None);
+                         getProfileCount(CondOp), trace.empty()?trace:trace + ".sel1", Stmt::LH_None);
+    // <-------------------------------
 
     // When computing PGO branch weights, we only know the overall count for
     // the true block. This code is essentially doing tail duplication of the
@@ -1750,15 +1791,25 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     incrementProfileCounter(CondOp);
     {
       ApplyDebugLocation DL(*this, Cond);
+      // MODIFIED: RHO@CODEMIND -------->
       EmitBranchOnBoolExpr(CondOp->getLHS(), TrueBlock, FalseBlock,
-                           LHSScaledTrueCount, LH);
+                           LHSScaledTrueCount, trace.empty()?trace:trace + ".sel2", LH);
+      // <-------------------------------                           
     }
     cond.end(*this);
 
     cond.begin(*this);
     EmitBlock(RHSBlock);
+    // MODIFIED: RHO@CODEMIND -------->
     EmitBranchOnBoolExpr(CondOp->getRHS(), TrueBlock, FalseBlock,
-                         TrueCount - LHSScaledTrueCount, LH);
+                         TrueCount - LHSScaledTrueCount, trace.empty()?trace:trace  + ".sel3", LH);
+
+    if(!trace.empty() && !RHSBlock->empty()) {
+      cout << ".rhs" << endl;
+      auto rhs_meta = RHSBlock->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
+      RHSBlock->begin()->setMetadata((trace + ".rhs").c_str(), rhs_meta);
+    }                         
+    // <-------------------------------                         
     cond.end(*this);
 
     return;
@@ -1799,7 +1850,18 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     ApplyDebugLocation DL(*this, Cond);
     CondV = EvaluateExprAsBool(Cond);
   }
-  Builder.CreateCondBr(CondV, TrueBlock, FalseBlock, Weights, Unpredictable);
+
+  // MODIFIED: RHO@CODEMIND -------->
+  auto inst = Builder.CreateCondBr(CondV, TrueBlock, FalseBlock, Weights, Unpredictable);
+  if(!trace.empty()) {
+    auto inst_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
+    inst->setMetadata(trace.c_str(), inst_meta);
+
+    auto first = Builder.GetInsertBlock()->getFirstInsertionPt();
+    auto first_meta = first->getMetadata(llvm::LLVMContext::MD_dbg);
+    first->setMetadata(trace.c_str(), first_meta);
+  }
+  // <-------------------------------  
 }
 
 /// ErrorUnsupported - Print out an error that codegen doesn't support the

@@ -29,9 +29,13 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/Support/SaveAndRestore.h"
+#include "llvm/IR/Metadata.h"
+#include "llvm/IR/LLVMContext.h"
+#include <iostream>
 
 using namespace clang;
 using namespace CodeGen;
+using namespace std;
 
 //===----------------------------------------------------------------------===//
 //                              Statement Emission
@@ -676,6 +680,11 @@ void CodeGenFunction::EmitIndirectGotoStmt(const IndirectGotoStmt &S) {
 }
 
 void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
+  // MODIFIED: RHO@CODEMIND -------->
+  static int IF_CNT = 0;
+  IF_CNT++;
+  // <-------------------------------
+
   // C99 6.8.4.1: The first substatement is executed if the expression compares
   // unequal to 0.  The condition must be a scalar type.
   LexicalScope ConditionScope(*this, S.getCond()->getSourceRange());
@@ -725,7 +734,11 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   uint64_t Count = getProfileCount(S.getThen());
   if (!Count && CGM.getCodeGenOpts().OptimizationLevel)
     LH = Stmt::getLikelihood(S.getThen(), S.getElse());
-  EmitBranchOnBoolExpr(S.getCond(), ThenBlock, ElseBlock, Count, LH);
+
+  // MODIFIED: RHO@CODEMIND -------->
+  std::string trace = "coyote.if." + std::to_string(IF_CNT);
+  EmitBranchOnBoolExpr(S.getCond(), ThenBlock, ElseBlock, Count, trace, LH);
+  // <-------------------------------    
 
   // Emit the 'then' code.
   EmitBlock(ThenBlock);
@@ -756,6 +769,21 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
 
   // Emit the continuation block for code after the if.
   EmitBlock(ContBlock, true);
+
+  // MODIFIED: RHO@CODEMIND -------->
+  auto then_meta = ThenBlock->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
+  ThenBlock->begin()->setMetadata(("coyote.then." + std::to_string(IF_CNT)).c_str(), then_meta);
+
+  if(!ElseBlock->empty()) {
+    auto else_meta = ElseBlock->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
+    ElseBlock->begin()->setMetadata(("coyote.else." + std::to_string(IF_CNT)).c_str(), else_meta);
+  }
+  
+  if(!ContBlock->empty()) {
+    auto cont_meta = ContBlock->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
+    ContBlock->begin()->setMetadata("coyote.ifcont", cont_meta);  
+  }
+  // <-------------------------------
 }
 
 void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
@@ -814,7 +842,12 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
       ExitBlock = createBasicBlock("while.exit");
     llvm::MDNode *Weights = createProfileOrBranchWeightsForLoop(
         S.getCond(), getProfileCount(S.getBody()), S.getBody());
-    Builder.CreateCondBr(BoolCondVal, LoopBody, ExitBlock, Weights);
+    
+    // MODIFIED: RHO@CODEMIND -------->
+    auto inst =  Builder.CreateCondBr(BoolCondVal, LoopBody, ExitBlock, Weights);
+    auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
+    inst->setMetadata("coyote.loopcond", cond_meta);
+    // <-------------------------------
 
     if (ExitBlock != LoopExit.getBlock()) {
       EmitBlock(ExitBlock);
@@ -910,9 +943,15 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
   // As long as the condition is true, iterate the loop.
   if (EmitBoolCondBranch) {
     uint64_t BackedgeCount = getProfileCount(S.getBody()) - ParentCount;
-    Builder.CreateCondBr(
+
+    // MODIFIED: RHO@CODEMIND -------->
+    auto inst = Builder.CreateCondBr(
         BoolCondVal, LoopBody, LoopExit.getBlock(),
         createProfileWeightsForLoop(S.getCond(), BackedgeCount));
+
+    auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
+    inst->setMetadata("coyote.loopcond", cond_meta);
+    // <-------------------------------    
   }
 
   LoopStack.pop();
@@ -997,7 +1036,11 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
       if (C->isOne())
         FnIsMustProgress = false;
 
-    Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
+    // MODIFIED: RHO@CODEMIND -------->    
+    auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
+    auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
+    inst->setMetadata("coyote.loopcond", cond_meta);
+    // <-------------------------------
 
     if (ExitBlock != LoopExit.getBlock()) {
       EmitBlock(ExitBlock);
@@ -1078,7 +1121,12 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
   llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond());
   llvm::MDNode *Weights = createProfileOrBranchWeightsForLoop(
       S.getCond(), getProfileCount(S.getBody()), S.getBody());
-  Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
+      
+  // MODIFIED: RHO@CODEMIND -------->
+  auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
+  auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
+  inst->setMetadata("coyote.loopcond", cond_meta);
+  // <-------------------------------
 
   if (ExitBlock != LoopExit.getBlock()) {
     EmitBlock(ExitBlock);

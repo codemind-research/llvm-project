@@ -4417,6 +4417,7 @@ public:
   void EmitBranchToCounterBlock(const Expr *Cond, BinaryOperator::Opcode LOp,
                                 llvm::BasicBlock *TrueBlock,
                                 llvm::BasicBlock *FalseBlock,
+                                std::string trace,
                                 uint64_t TrueCount = 0,
                                 Stmt::Likelihood LH = Stmt::LH_None,
                                 const Expr *CntrIdx = nullptr);
@@ -4428,7 +4429,7 @@ public:
   /// evaluate to true based on PGO data.
   void EmitBranchOnBoolExpr(const Expr *Cond, llvm::BasicBlock *TrueBlock,
                             llvm::BasicBlock *FalseBlock, uint64_t TrueCount,
-                            Stmt::Likelihood LH = Stmt::LH_None);
+                            std::string trace = "", Stmt::Likelihood LH = Stmt::LH_None);
 
   /// Given an assignment `*LHS = RHS`, emit a test that checks if \p RHS is
   /// nonnull, if \p LHS is marked _Nonnull.
