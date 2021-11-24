@@ -280,8 +280,22 @@ TypeEvaluationKind CodeGenFunction::getEvaluationKind(QualType type) {
     llvm_unreachable("unknown type kind!");
   }
 }
+// MODIFIED: BAE@CODEMIND -------->
+llvm::DebugLoc CodeGenFunction::EmitReturnBlock(SmallVectorImpl<unsigned> &Backup) {
+  auto BackupProc = [&](const llvm::BasicBlock *B){ 
+    unsigned int DbgID = getLLVMContext().getMDKindID("dbg");
+    SmallVector<std::pair<unsigned, llvm::MDNode *>, 4> Temp;
+    for (auto &I : *B) {
+      I.getAllMetadata(Temp);
+      auto DbgNode = I.getMetadata(llvm::LLVMContext::MD_dbg);
+      for (auto Meta : Temp) {
+        if (Meta.first != DbgID && Meta.second == DbgNode)
+          Backup.push_back(Meta.first);
+      }
+    }
+  };
+// <-------------------------------
 
-llvm::DebugLoc CodeGenFunction::EmitReturnBlock() {
   // For cleanliness, we try to avoid emitting the return block for
   // simple cases.
   llvm::BasicBlock *CurBB = Builder.GetInsertBlock();
@@ -312,6 +326,9 @@ llvm::DebugLoc CodeGenFunction::EmitReturnBlock() {
       // later by the actual 'ret' instruction.
       llvm::DebugLoc Loc = BI->getDebugLoc();
       Builder.SetInsertPoint(BI->getParent());
+      // MODIFIED: BAE@CODEMIND -------->
+      BackupProc(BI->getParent());
+      // <-------------------------------
       BI->eraseFromParent();
       delete ReturnBlock.getBlock();
       ReturnBlock = JumpDest();
@@ -385,7 +402,10 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
   }
 
   // Emit function epilog (to return).
-  llvm::DebugLoc Loc = EmitReturnBlock();
+  // MODIFIED: BAE@CODEMIND -------->
+  SmallVector<unsigned, 4> Backup;
+  llvm::DebugLoc Loc = EmitReturnBlock(Backup);
+  // <-------------------------------
 
   if (ShouldInstrumentFunction()) {
     if (CGM.getCodeGenOpts().InstrumentFunctions)
@@ -402,7 +422,9 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
   // Reset the debug location to that of the simple 'return' expression, if any
   // rather than that of the end of the function's scope '}'.
   ApplyDebugLocation AL(*this, Loc);
-  EmitFunctionEpilog(*CurFnInfo, EmitRetDbgLoc, EndLoc);
+  // MODIFIED: BAE@CODEMIND -------->
+  EmitFunctionEpilog(*CurFnInfo, EmitRetDbgLoc, EndLoc, Backup);
+  // <-------------------------------
   EmitEndEHSpec(CurCodeDecl);
 
   assert(EHStack.empty() &&

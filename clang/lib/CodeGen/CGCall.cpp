@@ -3261,9 +3261,18 @@ llvm::Value *CodeGenFunction::EmitCMSEClearRecord(llvm::Value *Src,
   return R;
 }
 
+// MODIFIED: BAE@CODEMIND -------->
 void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
                                          bool EmitRetDbgLoc,
-                                         SourceLocation EndLoc) {
+                                         SourceLocation EndLoc,
+                                         SmallVectorImpl<unsigned> &Backup) {
+  auto RestoreProc = [&](llvm::Instruction *I) {
+    auto DbgNode = I->getMetadata(llvm::LLVMContext::MD_dbg);
+    for (auto Kind : Backup)
+      I->setMetadata(Kind, DbgNode);
+  };
+// <-------------------------------
+
   if (FI.isNoReturn()) {
     // Noreturn functions don't return.
     EmitUnreachable(EndLoc);
@@ -3272,13 +3281,19 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
 
   if (CurCodeDecl && CurCodeDecl->hasAttr<NakedAttr>()) {
     // Naked functions don't have epilogues.
-    Builder.CreateUnreachable();
+    // MODIFIED: BAE@CODEMIND -------->
+    llvm::Instruction *Ret = Builder.CreateUnreachable();
+    RestoreProc(Ret);
+    // <-------------------------------
     return;
   }
 
   // Functions with no result always return void.
   if (!ReturnValue.isValid()) {
-    Builder.CreateRetVoid();
+    // MODIFIED: BAE@CODEMIND -------->
+    llvm::Instruction *Ret = Builder.CreateRetVoid();
+    RestoreProc(Ret);
+    // <-------------------------------
     return;
   }
 
@@ -3440,6 +3455,9 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
   } else {
     Ret = Builder.CreateRetVoid();
   }
+  // MODIFIED: BAE@CODEMIND -------->
+  RestoreProc(Ret);
+  // <-------------------------------
 
   if (RetDbgLoc)
     Ret->setDebugLoc(std::move(RetDbgLoc));

@@ -2141,7 +2141,9 @@ public:
   /// possible.
   /// \return The debug location of the user written return statement if the
   /// return block is is avoided.
-  llvm::DebugLoc EmitReturnBlock();
+  // MODIFIED: BAE@CODEMIND -------->
+  llvm::DebugLoc EmitReturnBlock(SmallVectorImpl<unsigned> &Backup);
+  // <-------------------------------
 
   /// FinishFunction - Complete IR generation of the current function. It is
   /// legal to call this function even if there is no current insertion point.
@@ -2284,8 +2286,10 @@ public:
 
   /// EmitFunctionEpilog - Emit the target specific LLVM code to return the
   /// given temporary.
+  // MODIFIED: BAE@CODEMIND -------->
   void EmitFunctionEpilog(const CGFunctionInfo &FI, bool EmitRetDbgLoc,
-                          SourceLocation EndLoc);
+                          SourceLocation EndLoc, SmallVectorImpl<unsigned> &Backup);
+  // <-------------------------------
 
   /// Emit a test that checks if the return value \p RV is nonnull.
   void EmitReturnValueCheck(llvm::Value *RV);
