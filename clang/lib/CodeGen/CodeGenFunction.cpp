@@ -283,6 +283,8 @@ TypeEvaluationKind CodeGenFunction::getEvaluationKind(QualType type) {
 // MODIFIED: BAE@CODEMIND -------->
 llvm::DebugLoc CodeGenFunction::EmitReturnBlock(SmallVectorImpl<unsigned> &Backup) {
   auto BackupProc = [&](const llvm::BasicBlock *B){ 
+    if (B == nullptr)
+      return;
     unsigned int DbgID = getLLVMContext().getMDKindID("dbg");
     SmallVector<std::pair<unsigned, llvm::MDNode *>, 4> Temp;
     for (auto &I : *B) {

@@ -3267,6 +3267,8 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
                                          SourceLocation EndLoc,
                                          SmallVectorImpl<unsigned> &Backup) {
   auto RestoreProc = [&](llvm::Instruction *I) {
+    if (I == nullptr)
+      return;
     auto DbgNode = I->getMetadata(llvm::LLVMContext::MD_dbg);
     for (auto Kind : Backup)
       I->setMetadata(Kind, DbgNode);
