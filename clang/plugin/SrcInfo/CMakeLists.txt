@@ -1,13 +1,5 @@
 #set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if( NOT MSVC )
-  if( NOT LLVM_REQUIRES_RTTI )
-    if( NOT LLVM_REQUIRES_EH )
-      set(LLVM_EXPORTED_SYMBOL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/SrcInfo.exports)
-    endif()
-  endif()
-endif()
-
 add_llvm_library(SrcInfo
                   MODULE
                     CodemindUtils.cpp

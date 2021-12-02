@@ -56,7 +56,6 @@ CodegenItems::CodegenItems(SourceInfoConsumer *ci, string path) {
   if (ec) {
     file->close();
     file.reset(nullptr);
-    throw runtime_error("File open error");
   }
 }
 
@@ -64,6 +63,7 @@ CodegenItems::~CodegenItems() {
   if (file != nullptr) {
     file->flush();
     file->close();
+    file.reset(nullptr);
   }
 }
 

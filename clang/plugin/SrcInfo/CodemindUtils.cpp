@@ -78,8 +78,6 @@ namespace codemind_utils {
         break;
       }
       case TemplateArgument::ArgKind::Pack : {
-        if (ta.pack_size() <= 0)
-          throw runtime_error("Empty pack");
         auto pack = ta.pack_elements();
         for (unsigned i = 0; i < pack.size(); i++)
           result += ((i > 0) ? "," : "") + getTemplateArgumentToString(pack[i]);
@@ -93,16 +91,15 @@ namespace codemind_utils {
 
   string getRecordDeclToString(const RecordDecl *rd) {
     if (rd == nullptr)
-      throw invalid_argument("RecordDecl is null");
+      return "";
     auto name = rd->getNameAsString();
     if (auto trd = dyn_cast<ClassTemplateSpecializationDecl>(rd)) {
       name += "<";
       for (unsigned i = 0; i < trd->getTemplateInstantiationArgs().size(); i++) {
-        try {
-          name += ((i > 0) ? "," : "") + getTemplateArgumentToString(trd->getTemplateInstantiationArgs().get(i));
-        } catch (exception &e) {
+        auto args = getTemplateArgumentToString(trd->getTemplateInstantiationArgs().get(i));
+        if (args == "")
           return "";
-        }
+        name += ((i > 0) ? "," : "") + args;
       }
       name += ">";
     } else if (rd->isTemplated()) {
