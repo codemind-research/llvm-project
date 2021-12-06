@@ -105,8 +105,10 @@ string CodegenItems::getMangleName(const NamedDecl *d) {
       if (isa<CXXConstructorDecl>(d))
         gd = gd.getWithCtorType(CXXCtorType::Ctor_Complete);
       else if (auto dd = dyn_cast<CXXDestructorDecl>(d)) {
-        if (gd.getDtorType() == CXXDtorType::Dtor_Complete && dd->getParent()->getNumVBases() == 0)
+        gd = gd.getWithDtorType(CXXDtorType::Dtor_Complete);
+        if (dd->getParent()->getNumVBases() == 0) {
           gd = gd.getWithDtorType(CXXDtorType::Dtor_Base);
+        }
       }
     }
     mangler->mangleName(gd, buffer);
