@@ -9,6 +9,7 @@
   #pragma comment(lib, "dbghelp.lib")
 #elif __linux__
   #include <execinfo.h>
+  #include <stdlib.h>
 #endif
 
 namespace codemind_debug {
