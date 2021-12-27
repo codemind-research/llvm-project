@@ -120,15 +120,15 @@ namespace codemind_utils {
     if (rd == nullptr)
       return ""; 
     string result = "";
-    auto ord = rd->getOuterLexicalRecordContext();
-    result = rd == ord ? getNamespaceName(rd) : getRecordName(ord, showTmpl);
+    auto ord = cast<RecordDecl>(rd->getParent());
+    result = (ord != nullptr && ord->isRecord()) ? getRecordName(ord, showTmpl) : getNamespaceName(rd);
     result += (result.empty() ? "" : "::");
     result += (rd->getNameAsString().empty() ? "(" + to_string(rd->getID()) + ")" : rd->getNameAsString());
     if (showTmpl) {
       if (auto trd = dyn_cast<ClassTemplateSpecializationDecl>(rd))
-        result += "<" + getTemplateArgumentListToString(&trd->getTemplateInstantiationArgs()) + ">";
+        result += getTemplateArgumentListToString(&trd->getTemplateInstantiationArgs());
       else if (auto list = rd->getDescribedTemplateParams())
-        result += "<" + getTemplateParameterListToString(list) + ">";
+        result += getTemplateParameterListToString(list);
     }
     return result;
   }
@@ -140,9 +140,9 @@ namespace codemind_utils {
     result += ((result.empty()) ? "" : "::") + fd->getNameAsString();
     if (showTmpl) {
       if (auto list = fd->getTemplateSpecializationArgs()) {
-        result += "<" + getTemplateArgumentListToString(list) + ">";
+        result += getTemplateArgumentListToString(list);
       } else if (auto list = fd->getDescribedTemplateParams())
-        result += "<" + getTemplateParameterListToString(list) + ">";
+        result += getTemplateParameterListToString(list);
     }
     return result;
   }
