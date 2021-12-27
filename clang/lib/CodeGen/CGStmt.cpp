@@ -681,8 +681,13 @@ void CodeGenFunction::EmitIndirectGotoStmt(const IndirectGotoStmt &S) {
 
 void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   // MODIFIED: RHO@CODEMIND -------->
-  static int IF_CNT = 0;
-  IF_CNT++;
+  auto getDebugSymbol = [&](const SourceRange &R) {
+    auto &SourceManager = getContext().getSourceManager();
+    return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
+           "-" + 
+           to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+  };
+  string symbol = getDebugSymbol(S.getSourceRange());
   // <-------------------------------
 
   // C99 6.8.4.1: The first substatement is executed if the expression compares
@@ -736,9 +741,9 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
     LH = Stmt::getLikelihood(S.getThen(), S.getElse());
 
   // MODIFIED: RHO@CODEMIND -------->
-  std::string trace = "coyote.if." + std::to_string(IF_CNT);
+  std::string trace = "coyote.if." + symbol;
   EmitBranchOnBoolExpr(S.getCond(), ThenBlock, ElseBlock, Count, trace, LH);
-  // <-------------------------------    
+  // <------------------------------- 
 
   // Emit the 'then' code.
   EmitBlock(ThenBlock);
@@ -771,18 +776,19 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   EmitBlock(ContBlock, true);
 
   // MODIFIED: RHO@CODEMIND -------->
-  auto then_meta = ThenBlock->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
-  ThenBlock->begin()->setMetadata(("coyote.then." + std::to_string(IF_CNT)).c_str(), then_meta);
-
-  if(!ElseBlock->empty()) {
-    auto else_meta = ElseBlock->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
-    ElseBlock->begin()->setMetadata(("coyote.else." + std::to_string(IF_CNT)).c_str(), else_meta);
-  }
-  
-  if(!ContBlock->empty()) {
-    auto cont_meta = ContBlock->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
-    ContBlock->begin()->setMetadata("coyote.ifcont", cont_meta);  
-  }
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  llvm::MDNode *MD = getFileData(S.getSourceRange());
+  ThenBlock->begin()->setMetadata("coyote.then." + symbol, MD);
+  if(!ElseBlock->empty())
+    ElseBlock->begin()->setMetadata("coyote.else." + symbol, MD);
+  if(!ContBlock->empty())
+    ContBlock->begin()->setMetadata("coyote.ifcont." + symbol, MD);
   // <-------------------------------
 }
 

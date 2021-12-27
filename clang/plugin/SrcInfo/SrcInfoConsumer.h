@@ -5,19 +5,15 @@
 
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 
 namespace srcinfo_plugin {
   using namespace codemind_plugin;
 
-  struct MatcherOption {
-    bool pre_build = false;
-    bool build = false;
-    bool code_generator = false;
-    string code_generated_path = "";
-  };
+  enum class ItemAttr {Prebuild, Build, CodeGenerator, Metric};
 
-  enum class ItemAttr {Prebuild, Build, CodeGenerator};
+  using MatcherOption = map<ItemAttr, set<string>>;
 
   class SourceInfoItems {
     public:
@@ -28,9 +24,10 @@ namespace srcinfo_plugin {
     private:
       map<ItemAttr, shared_ptr<SourceInfoItems>> items;
     protected:
-      void InitPrebuild();
-      void InitBuild();
-      void InitCodeGenerator(string path);
+      void InitPrebuild(set<string> detail);
+      void InitBuild(set<string> detail);
+      void InitCodeGenerator(set<string> detail);
+      void InitMetric(set<string> detail);
     public:
       SourceInfoConsumer(const CompilerInstance &ci, MatcherOption &option);
 

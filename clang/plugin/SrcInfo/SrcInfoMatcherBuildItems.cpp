@@ -5,14 +5,14 @@ using namespace codemind_utils;
 using namespace srcinfo_matcher_build;
 
 void BuildItems::finalize() {
-  for (auto x : classnames) {
-    switch (get<TagTypeKind>(x)) {
+  for (auto data : classnames) {
+    switch (get<TagTypeKind>(data)) {
       case TagTypeKind::TTK_Class :
-        writeTo(outs(), "CN:", get<string>(x), "\n");
+        writeTo(outs(), "CN:", get<string>(data), "\n");
         break;
       case TagTypeKind::TTK_Struct :
       case TagTypeKind::TTK_Union :
-        writeTo(outs(), "SN:", get<string>(x), "\n");
+        writeTo(outs(), "SN:", get<string>(data), "\n");
         break;
       default:
         break;

@@ -10,8 +10,8 @@ using namespace srcinfo_plugin;
 
 class PrebuildVarDecl : public CodemindMatcher<SourceInfoConsumer> {
   public:
-    PrebuildVarDecl(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
+    PrebuildVarDecl(SourceInfoConsumer *cs) : CodemindMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
       SourceManager &SourceMgr = getSourceManager();
       auto vd = Results.Nodes.getNodeAs<VarDecl>("var");
       FullSourceLoc fsr(vd->getLocation(), SourceMgr);
@@ -60,8 +60,8 @@ class PrebuildVarDecl : public CodemindMatcher<SourceInfoConsumer> {
 
 class PrebuildClassDecl : public CodemindMatcher<SourceInfoConsumer> {
   public:
-    PrebuildClassDecl(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
+    PrebuildClassDecl(SourceInfoConsumer *cs) : CodemindMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
       SourceManager &SourceMgr = getSourceManager();
       auto cd = Results.Nodes.getNodeAs<CXXRecordDecl>("class");
       
@@ -84,7 +84,7 @@ class PrebuildClassDecl : public CodemindMatcher<SourceInfoConsumer> {
     }
 };
 
-void SourceInfoConsumer::InitPrebuild() {
+void SourceInfoConsumer::InitPrebuild(set<string> detail) {
   MatchFinder &finder = getMatchFinder();
 
   auto prebuildVarDecl = make_shared<PrebuildVarDecl>(this);

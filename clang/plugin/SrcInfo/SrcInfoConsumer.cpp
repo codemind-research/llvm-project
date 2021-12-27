@@ -3,12 +3,14 @@
 using namespace srcinfo_plugin;
 
 SourceInfoConsumer::SourceInfoConsumer(const CompilerInstance &ci, MatcherOption &option) : CodemindASTConsumer(ci) {
-  if (option.pre_build)
-    InitPrebuild();
-  if (option.build)
-    InitBuild();
-  if (option.code_generator)
-    InitCodeGenerator(option.code_generated_path);
+  for (auto opt : option) {
+    switch (opt.first) {
+      case ItemAttr::Prebuild      : InitPrebuild(opt.second);      break;
+      case ItemAttr::Build         : InitBuild(opt.second);         break;
+      case ItemAttr::CodeGenerator : InitCodeGenerator(opt.second); break;
+      case ItemAttr::Metric        : InitMetric(opt.second);        break;
+    }
+  }
 }
 
 void SourceInfoConsumer::HandleTranslationUnit(ASTContext &Ctx) {

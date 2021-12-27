@@ -1,86 +1,78 @@
 #include "CodemindUtils.h"
 
-#ifdef _WIN32
-  // #define NOMINMAX
-  // #include <Windows.h>
-  // #include <DbgHelp.h>
-  // #undef CALLBACK
-#elif __linux__
-  #include <execinfo.h>
-#endif
-
 namespace codemind_utils {
-  void printCallStack(raw_fd_ostream &os) {
-    #define BUFFER_SIZE 1024
-    void *buffer[BUFFER_SIZE];
+  /* declaration */
+  vector<string> getTemplateArgumentToString(const TemplateArgument &ta);
+  string getTemplateArgumentListToString(const TemplateArgumentList *list);
+  string getTemplateParameterListToString(const TemplateParameterList *list);
+  string getQualifiedNameString(const DeclContext *dc, bool showTmpl);
+  string getNamespaceName(const DeclContext *dc);
+  string getRecordName(const RecordDecl *rd, bool showTmpl);
+  string getFunctionName(const FunctionDecl *fd, bool showTmpl);
+  string getMethodName(const CXXMethodDecl *md, bool showTmpl);
 
-    #ifdef _WIN32
-      // #define SYMBOL_SIZE 1024;
-      // DWORD displacement;
-      // DWORD64 address;
-      // IMAGEHLP_LINE64 line;
-      // line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
-      // const unsigned symbol_size = SYMBOL_SIZE;
-      // SYMBOL_INFO *symbol = (SYMBOL_INFO *)malloc(sizeof(SYMBOL_INFO) + sizeof(char) * (symbol_size - 1));
-      // symbol->MaxNameLen = symbol_size;
-      // symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-      // HANDLE process = GetCurrentProcess();
-      // SymInitialize(process, NULL, TRUE);
-      // int count = CaptureStackBackTrace(0, BUFFER_SIZE, buffer, NULL);
-      // writeTo(os, "Found Call Stack: ", count, "\n");
-      // for (unsigned i = 0; i < count; i++) {
-      //   displacement = 0;
-      //   address = reinterpret_cast<DWORD64>(buffer[i]);
-      //   SymFromAddr(process, address, NULL, symbol);
-      //   if (SymGetLineFromAddr64(process, address, &displacement, &line))
-      //     writeTo(os, "  ", line.FileName, ":", line.LineNumber, "(", symbol->Name, ")", " [", format("0x%x", symbol->Address), "]", "\n");
-      //   else
-      //     writeTo(os, "  ", "AnonymousFile(", symbol->Name, ")", " [", format("0x%x", symbol->Address), "]", "\n");
-      // }
-      // free(symbol);
-    #elif __linux__
-      int count = backtrace(buffer, BUFFER_SIZE);
-      char **strings = backtrace_symbols(buffer, count);
-      writeTo(os, "Found Call Stack: ", count, "\n");
-      if (strings != NULL) {
-        for (int i = 0; i < count; i++)
-          writeTo(os, "  ", strings[i], "\n");
-        free(strings);
-      } else
-        writeTo(os, "  ", "trace symbols print error", "\n");
-    #endif
-  }
-
-  string getQualTypeToString(QualType qt) {
-    string prefix = "", suffix = "";
+  /* implementation */
+  string getQualifiedTypeString(QualType qt, bool showTmpl) {
+    string reference = "", array = "";
+    bool prefix_const = false, suffix_const = false;
+    if (qt->isArrayType()) {
+      array = " [";
+      if (auto type = dyn_cast<ConstantArrayType>(qt->getAsArrayTypeUnsafe()))
+        array += to_string(*(type->getSize().getRawData()));
+      array += "]";
+      qt = qt->getAsArrayTypeUnsafe()->getElementType();
+    }
+    if (qt->isAnyPointerType() && qt.isLocalConstQualified()) {
+      suffix_const = true;
+      qt = qt.getLocalUnqualifiedType();
+    }
     while (qt->isPointerType() || qt->isReferenceType()) {
-      suffix += (qt->isPointerType() ? "*" : "&");
+      reference += (qt->isPointerType() ? "*" : "&");
       qt = qt->getPointeeType();
     }
     if (qt.isLocalConstQualified()) {
-      prefix = "const ";
+      prefix_const = true;
       qt = qt.getLocalUnqualifiedType();
     }
-    return prefix + ((qt->isRecordType()) ? getRecordDeclToString(qt->getAsRecordDecl()) : (qt.getAsString())) + suffix;
+
+    return ((prefix_const) ? "const " : "") +
+           ((qt->isRecordType()) ? getRecordName(qt->getAsRecordDecl(), showTmpl) : (qt.getAsString())) +
+           reference + array +
+           ((suffix_const) ? " const" : "");
   }
 
-  string getTemplateArgumentToString(const TemplateArgument &ta) {
-    string result = "";
+  string getQualifiedNameString(const NamedDecl *decl, bool showTmpl) {
+    if (decl == nullptr)
+      return "";
+    auto result = decl->getNameAsString();
+    if (auto rd = dyn_cast<RecordDecl>(decl))
+      result = getRecordName(rd, showTmpl);
+    else if (auto md = dyn_cast<CXXMethodDecl>(decl))
+      result = getMethodName(md, showTmpl);
+    else if (auto fd = dyn_cast<FunctionDecl>(decl))
+      result = getFunctionName(fd, showTmpl);
+    return result;
+  }
+
+  vector<string> getTemplateArgumentToString(const TemplateArgument &ta) {
+    vector<string> result;
     switch (ta.getKind()) {
       case TemplateArgument::ArgKind::Type : {
         QualType qt = ta.getAsType();
-        result = getQualTypeToString(qt);
+        result.push_back(getQualifiedTypeString(qt));
         break;
       }
       case TemplateArgument::ArgKind::Integral : {
         QualType qt = ta.getIntegralType();
-        result = getQualTypeToString(qt);
+        result.push_back(getQualifiedTypeString(qt));
         break;
       }
       case TemplateArgument::ArgKind::Pack : {
         auto pack = ta.pack_elements();
-        for (unsigned i = 0; i < pack.size(); i++)
-          result += ((i > 0) ? "," : "") + getTemplateArgumentToString(pack[i]);
+        for (unsigned i = 0; i < pack.size(); i++) {
+          auto packs = getTemplateArgumentToString(pack[i]);
+          result.insert(result.end(), packs.begin(), packs.end());
+        }
         break;
       }
       default :
@@ -89,26 +81,75 @@ namespace codemind_utils {
     return result;
   }
 
-  string getRecordDeclToString(const RecordDecl *rd) {
-    if (rd == nullptr)
+  string getTemplateArgumentListToString(const TemplateArgumentList *list) {
+    if (list == nullptr)
       return "";
-    auto name = rd->getNameAsString();
-    if (auto trd = dyn_cast<ClassTemplateSpecializationDecl>(rd)) {
-      name += "<";
-      for (unsigned i = 0; i < trd->getTemplateInstantiationArgs().size(); i++) {
-        auto args = getTemplateArgumentToString(trd->getTemplateInstantiationArgs().get(i));
-        if (args == "")
-          return "";
-        name += ((i > 0) ? "," : "") + args;
-      }
-      name += ">";
-    } else if (rd->isTemplated()) {
-      name += "<";
-      auto templ = rd->getDescribedTemplateParams();
-      for (unsigned i = 0; i < templ->size(); i++)
-        name += ((i > 0) ? "," : "") + (string)"type" + to_string(i);
-      name += ">";
+    vector<string> args;
+    for (unsigned i = 0; i < list->size(); i++ ) {
+      auto arg = getTemplateArgumentToString(list->get(i));
+      if (!arg.empty())
+        args.insert(args.end(), arg.begin(), arg.end());
     }
-    return name;
+
+    return "<" + VectorToString<string>(args, [](string arg){ return arg; }, ",") + ">";
+  }
+
+  string getTemplateParameterListToString(const TemplateParameterList *list) {
+    if (list == nullptr)
+      return "";
+    vector<string> args;
+    for (unsigned i = 0; i < list->size(); i++ )
+      args.push_back("type_" + to_string(i));
+
+    return "<" + VectorToString<string>(args, [](string arg){ return arg; }, ",") + ">";
+  }
+  string getNamespaceName(const DeclContext *dc) {
+    if (dc == nullptr)
+      return "";
+    vector<const DeclContext*> list;
+    dc = dc->getEnclosingNamespaceContext();
+    while (isa<NamespaceDecl>(dc) && find(list.begin(), list.end(), dc) == list.end()) {
+      list.push_back(dc);
+      dc = dc->getParent()->getEnclosingNamespaceContext();
+    }
+    reverse(list.begin(), list.end());
+    return VectorToString<const DeclContext*>(list, [](const DeclContext* arg){ return dyn_cast<NamespaceDecl>(arg)->getNameAsString(); }, "::");
+  }
+
+  string getRecordName(const RecordDecl *rd, bool showTmpl) {
+    if (rd == nullptr)
+      return ""; 
+    string result = "";
+    auto ord = rd->getOuterLexicalRecordContext();
+    result = rd == ord ? getNamespaceName(rd) : getRecordName(ord, showTmpl);
+    result += (result.empty() ? "" : "::");
+    result += (rd->getNameAsString().empty() ? "(" + to_string(rd->getID()) + ")" : rd->getNameAsString());
+    if (showTmpl) {
+      if (auto trd = dyn_cast<ClassTemplateSpecializationDecl>(rd))
+        result += "<" + getTemplateArgumentListToString(&trd->getTemplateInstantiationArgs()) + ">";
+      else if (auto list = rd->getDescribedTemplateParams())
+        result += "<" + getTemplateParameterListToString(list) + ">";
+    }
+    return result;
+  }
+
+  string getFunctionName(const FunctionDecl *fd, bool showTmpl) {
+    if (fd == nullptr)
+      return "";
+    string result = getNamespaceName(fd);
+    result += ((result.empty()) ? "" : "::") + fd->getNameAsString();
+    if (showTmpl) {
+      if (auto list = fd->getTemplateSpecializationArgs()) {
+        result += "<" + getTemplateArgumentListToString(list) + ">";
+      } else if (auto list = fd->getDescribedTemplateParams())
+        result += "<" + getTemplateParameterListToString(list) + ">";
+    }
+    return result;
+  }
+
+  string getMethodName(const CXXMethodDecl *md, bool showTmpl) {
+    if (md == nullptr)
+      return "";
+    return getRecordName(md->getParent(), showTmpl) + "::" + md->getNameAsString();
   }
 }

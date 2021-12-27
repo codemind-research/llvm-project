@@ -10,6 +10,8 @@ add_llvm_library(SrcInfo
                     SrcInfoMatcherBuildItems.cpp
                     SrcInfoMatcherCodegen.cpp
                     SrcInfoMatcherCodegenItems.cpp
+                    SrcInfoMatcherMetric.cpp
+                    SrcInfoMatcherMetricItems.cpp
                     ${LLVM_EXTERNAL_CLANG_SOURCE_DIR}/lib/ASTMatchers/ASTMatchersInternal.cpp
                   PLUGIN_TOOL
                     clang

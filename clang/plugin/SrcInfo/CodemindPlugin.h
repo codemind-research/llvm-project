@@ -81,7 +81,7 @@ namespace codemind_plugin {
     protected:
       Consumer *consumer;
     public:
-      CodemindMatcher(Consumer *c) : consumer(c) {
+      CodemindMatcher(Consumer *cs) : consumer(cs) {
       }
 
       SourceManager &getSourceManager() {

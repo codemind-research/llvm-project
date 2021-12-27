@@ -11,10 +11,16 @@ using namespace codemind_utils;
 using namespace srcinfo_plugin;
 using namespace srcinfo_matcher_build;
 
-class BuildConstIntVarDecl : public CodemindMatcher<SourceInfoConsumer> {
+class BuildMatcher : public CodemindMatcher<SourceInfoConsumer> {
+  public :
+    BuildMatcher(SourceInfoConsumer *cs) : CodemindMatcher(cs) {}
+    BuildItems* getBuildItem() { return static_cast<BuildItems*>(consumer->getSourceInfoItem(ItemAttr::Build)); }
+};
+
+class BuildConstIntVarDecl : public BuildMatcher {
   public:
-    BuildConstIntVarDecl(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
+    BuildConstIntVarDecl(SourceInfoConsumer *cs) : BuildMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
       SourceManager &SourceMgr = getSourceManager();
       auto vd = Results.Nodes.getNodeAs<FieldDecl>("var");
       auto literal = Results.Nodes.getNodeAs<IntegerLiteral>("init");
@@ -29,10 +35,10 @@ class BuildConstIntVarDecl : public CodemindMatcher<SourceInfoConsumer> {
     }
 };
 
-class BuildConstFloatVarDecl : public CodemindMatcher<SourceInfoConsumer> {
+class BuildConstFloatVarDecl : public BuildMatcher {
   public:
-    BuildConstFloatVarDecl(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
+    BuildConstFloatVarDecl(SourceInfoConsumer *cs) : BuildMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
       SourceManager &SourceMgr = getSourceManager();
       auto vd = Results.Nodes.getNodeAs<FieldDecl>("var");
       auto literal = Results.Nodes.getNodeAs<FloatingLiteral>("init");
@@ -49,15 +55,16 @@ class BuildConstFloatVarDecl : public CodemindMatcher<SourceInfoConsumer> {
     }
 };
 
-class BuildCallExpr : public CodemindMatcher<SourceInfoConsumer> {
+class BuildCallExpr : public BuildMatcher {
   public:
-    BuildCallExpr(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
+    BuildCallExpr(SourceInfoConsumer *cs) : BuildMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
       SourceManager &SourceMgr = getSourceManager();
       auto ce = Results.Nodes.getNodeAs<CallExpr>("call_expr");
       FullSourceLoc fsr(ce->getBeginLoc(), SourceMgr);
       if (SourceMgr.getMainFileID() != fsr.getFileID())
         return;
+
       if (ce->getCalleeDecl() == nullptr)
         return;
 
@@ -67,7 +74,8 @@ class BuildCallExpr : public CodemindMatcher<SourceInfoConsumer> {
           if (auto fd = dyn_cast<FunctionDecl>(ce->getCalleeDecl())) {
             int sline = SourceMgr.getExpansionLineNumber(ce->getBeginLoc());
             int scol = SourceMgr.getExpansionColumnNumber(ce->getBeginLoc());
-            writeTo(outs(), "CE:", sline, "'", scol, "'", fd->getQualifiedNameAsString(), "'", "'", fd->getType().getAsString(), "\n");
+            writeTo(outs(), "CE:", sline, "'", scol, "'", fd->getQualifiedNameAsString(),
+                    "'", "'", fd->getType().getAsString(), "\n");
           }
 #endif
           break;
@@ -87,7 +95,8 @@ class BuildCallExpr : public CodemindMatcher<SourceInfoConsumer> {
                 scol = SourceMgr.getExpansionColumnNumber(me->getMemberNameInfo().getBeginLoc());
               }
             }
-            writeTo(outs(), "CE:", sline, "'", scol, "'", md->getQualifiedNameAsString(), "'", md->getThisType().getAsString(), "'", md->getType().getAsString(), "\n");
+            writeTo(outs(), "CE:", sline, "'", scol, "'", md->getQualifiedNameAsString(), "'",
+                    md->getThisType().getAsString(), "'", md->getType().getAsString(), "\n");
           }
           break;
         }
@@ -98,7 +107,8 @@ class BuildCallExpr : public CodemindMatcher<SourceInfoConsumer> {
             return;
           int sline = SourceMgr.getExpansionLineNumber(ce->getBeginLoc());
           int scol = SourceMgr.getExpansionColumnNumber(ce->getBeginLoc());
-          writeTo(outs(), "CE:", sline, "'", scol, "'", dre->getNameInfo().getAsString(), "'", "'", ice->getType().getAsString(), "\n");
+          writeTo(outs(), "CE:", sline, "'", scol, "'", dre->getNameInfo().getAsString(),
+                  "'", "'", ice->getType().getAsString(), "\n");
           break;
         }
         case Decl::Kind::Field : {
@@ -108,7 +118,8 @@ class BuildCallExpr : public CodemindMatcher<SourceInfoConsumer> {
             return;
           int sline = SourceMgr.getExpansionLineNumber(ce->getBeginLoc());
           int scol = SourceMgr.getExpansionColumnNumber(ce->getBeginLoc());
-          writeTo(outs(), "CE:", sline, "'", scol, "'", me->getMemberNameInfo().getAsString(), "'", "'", ice->getType().getAsString(), "\n");
+          writeTo(outs(), "CE:", sline, "'", scol, "'", me->getMemberNameInfo().getAsString(),
+                  "'", "'", ice->getType().getAsString(), "\n");
           break;
         }
         default:
@@ -117,106 +128,85 @@ class BuildCallExpr : public CodemindMatcher<SourceInfoConsumer> {
     }
 };
 
-class BuildMethodDecl : public CodemindMatcher<SourceInfoConsumer> {
+class BuildMethodDecl : public BuildMatcher {
   public:
-    BuildMethodDecl(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
+    BuildMethodDecl(SourceInfoConsumer *cs) : BuildMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
       SourceManager &SourceMgr = getSourceManager();
       auto rd = Results.Nodes.getNodeAs<RecordDecl>("record");
       FullSourceLoc fsr(rd->getLocation(), SourceMgr);
 
-      // skip if other file element
       if (SourceMgr.getMainFileID() != fsr.getFileID())
         return;
-
-      if (rd->isTemplated() || rd->isLambda() || rd->isAnonymousStructOrUnion())
+      if (rd->isTemplated() || rd->isLambda() || rd->getNameAsString().empty())
         return;
 
-      auto name = getRecordDeclToString(rd);
+      auto name = getQualifiedNameString(rd);
       if (name.length() > 0) {
-        auto item = static_cast<BuildItems*>(consumer->getSourceInfoItem(ItemAttr::Build));
+        BuildItems *item = getBuildItem();
         if (item != nullptr)
           item->addClassName(name, rd->getTagKind());
       }
     }
 };
 
-class BuildFunctionDecl : public CodemindMatcher<SourceInfoConsumer> {
-  private:
-    string getPureName(string name) {
-      int bcount = 0;
-      string result;
-      for (unsigned i = 0; i < name.length(); i++) {
-        switch(name[i]) {
-          case '<' : bcount++; break;
-          case '>' : bcount--; break;
-          default :
-            if(bcount == 0)
-              result += name[i];
-            break;
-        }
-      }
-      return result;
-    }
-    string getParamString(const FunctionDecl *fd) {
-      string result = "(";
-      for (unsigned i = 0; i < fd->getNumParams(); i++) {
-        result += (i > 0) ? "," : "";
-        result += fd->getParamDecl(i)->getType().getAsString();
-      }
-      result += ")";
-      return result;
-    }
+class BuildFunctionDecl : public BuildMatcher {
   public:
-    BuildFunctionDecl(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
+    BuildFunctionDecl(SourceInfoConsumer *cs) : BuildMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
       SourceManager &SourceMgr = getSourceManager();
       auto fd = Results.Nodes.getNodeAs<FunctionDecl>("fun");
       auto rd = Results.Nodes.getNodeAs<RecordDecl>("record");
       FullSourceLoc fsr(fd->getLocation(), SourceMgr);
       auto filename = SourceMgr.getFilename(fsr.getFileLoc());
 
-      if (filename.size() > 0) {
-        auto fun_name = getPureName(fd->getQualifiedNameAsString()) + "'" + getParamString(fd);
-        if (rd != nullptr) {
-          // 익명 클래스는 배제
-          if (rd->getNameAsString().size() > 0) {
-            auto item = static_cast<BuildItems*>(consumer->getSourceInfoItem(ItemAttr::Build));
-            if ((item != nullptr) && item->RedundantCheck(filename.str(), rd->getNameAsString(), fun_name))
-              writeTo(outs(), "FN-M:", filename.str(), "'", fun_name, "\n");
-          }
-        } else {
-          auto item = static_cast<BuildItems*>(consumer->getSourceInfoItem(ItemAttr::Build));
-          if ((item != nullptr) && item->RedundantCheck(filename.str(), "", fun_name))
-            writeTo(outs(), "FN-N:", filename.str(), "'", fun_name, "\n");
+      if (fd->isTemplated())
+        return;
+      if (filename.size() == 0)
+        return;
+        
+      string fun_name = getQualifiedNameString(fd, false) + "'" + "(";
+      for (unsigned i = 0; i < fd->getNumParams(); i++)
+        fun_name += ((i > 0) ? "," : "") + getQualifiedTypeString(fd->getParamDecl(i)->getType());
+      fun_name += ")";
+      if (rd != nullptr) {
+        // 익명 클래스는 배제
+        if (rd->getNameAsString().size() > 0) {
+          BuildItems *item = getBuildItem();
+          if ((item != nullptr) && item->RedundantCheck(filename.str(), rd->getNameAsString(), fun_name))
+            writeTo(outs(), "FN-M:", filename.str(), "'", fun_name, "\n");
         }
+      } else {
+        BuildItems *item = getBuildItem();
+        if ((item != nullptr) && item->RedundantCheck(filename.str(), "", fun_name))
+          writeTo(outs(), "FN-N:", filename.str(), "'", fun_name, "\n");
       }
     }
 };
 
-class BuildCatchStmt : public CodemindMatcher<SourceInfoConsumer> {
+class BuildCatchStmt : public BuildMatcher {
   public:
-    BuildCatchStmt(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
+    BuildCatchStmt(SourceInfoConsumer *cs) : BuildMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
       SourceManager &SourceMgr = getSourceManager();
       auto stmt = Results.Nodes.getNodeAs<CXXCatchStmt>("catch");
       auto srcrange = stmt->getSourceRange();
       FullSourceLoc fsbegin(srcrange.getBegin(), SourceMgr);
-
+      auto filename = SourceMgr.getFilename(fsbegin.getFileLoc());
+      
       if (SourceMgr.getMainFileID() != fsbegin.getFileID())
         return;
+      if (filename.size() == 0)
+        return;
 
-      auto filename = SourceMgr.getFilename(fsbegin.getFileLoc());
-      if (filename.size() > 0) {
-        FullSourceLoc fsend(srcrange.getEnd(), SourceMgr);
-        int sline = SourceMgr.getExpansionLineNumber(fsbegin, NULL);
-        int send = SourceMgr.getExpansionLineNumber(fsend, NULL);
-        writeTo(outs(), "X:", sline, ",", send, "\n");
-      }
+      FullSourceLoc fsend(srcrange.getEnd(), SourceMgr);
+      int sline = SourceMgr.getExpansionLineNumber(fsbegin, NULL);
+      int send = SourceMgr.getExpansionLineNumber(fsend, NULL);
+      writeTo(outs(), "X:", sline, ",", send, "\n");
     }
 };
 
-void SourceInfoConsumer::InitBuild() {
+void SourceInfoConsumer::InitBuild(set<string> detail) {
   setSourceInfoItem(ItemAttr::Build, make_shared<BuildItems>());
   MatchFinder &finder = getMatchFinder();
 
@@ -260,6 +250,7 @@ void SourceInfoConsumer::InitBuild() {
       recordDecl(
         isDefinition(),
         unless(isImplicit()),
+        unless(hasAncestor(functionDecl())),
         anyOf(
           classTemplateSpecializationDecl(hasSpecializedTemplate(classTemplateDecl())),
           unless(classTemplateSpecializationDecl()))

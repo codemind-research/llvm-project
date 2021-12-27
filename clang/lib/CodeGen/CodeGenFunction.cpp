@@ -1631,6 +1631,16 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                                            uint64_t TrueCount,
                                            std::string trace,
                                            Stmt::Likelihood LH) {
+  // MODIFIED: RHO@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  // <-------------------------------
+
   Cond = Cond->IgnoreParens();
 
   if (const BinaryOperator *CondBOp = dyn_cast<BinaryOperator>(Cond)) {
@@ -1646,8 +1656,10 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         incrementProfileCounter(CondBOp);
 
         // MODIFIED: RHO@CODEMIND -------->
-        return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd, TrueBlock,
-                                        FalseBlock, trace.empty()?trace:trace + ".and1", TrueCount, LH);
+        return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd,
+                                        TrueBlock, FalseBlock,
+                                        trace.empty()?trace:trace + ".and1",
+                                        TrueCount, LH);
         // <-------------------------------
       }
 
@@ -1658,8 +1670,10 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // br(X && 1) -> br(X).
 
         // MODIFIED: RHO@CODEMIND -------->
-        return EmitBranchToCounterBlock(CondBOp->getLHS(), BO_LAnd, TrueBlock,
-                                        FalseBlock, trace.empty()?trace:trace + ".and2", TrueCount, LH, CondBOp);
+        return EmitBranchToCounterBlock(CondBOp->getLHS(), BO_LAnd,
+                                        TrueBlock, FalseBlock,
+                                        trace.empty()?trace:trace + ".and2",
+                                        TrueCount, LH, CondBOp);
         // <-------------------------------
       }
 
@@ -1678,12 +1692,14 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // __builtin_expect(X && Y, 0) -> only Y is unlikely
 
         // MODIFIED: RHO@CODEMIND -------->
-        EmitBranchOnBoolExpr(CondBOp->getLHS(), LHSTrue, FalseBlock, RHSCount, trace.empty()?trace:trace + ".and3", LH == Stmt::LH_Unlikely ? Stmt::LH_None : LH);
+        EmitBranchOnBoolExpr(CondBOp->getLHS(), LHSTrue, FalseBlock, RHSCount,
+                             trace.empty()?trace:trace + ".and3",
+                             LH == Stmt::LH_Unlikely ? Stmt::LH_None : LH);
         EmitBlock(LHSTrue);
         if(!trace.empty() && !LHSTrue->empty()) {
           cout << ".lhstt" << endl;
-          auto lhs_meta = LHSTrue->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
-          LHSTrue->begin()->setMetadata((trace + ".lhstt").c_str(), lhs_meta);
+          llvm::MDNode *MD = getFileData(CondBOp->getLHS()->getSourceRange());
+          LHSTrue->begin()->setMetadata((trace + ".lhstt").c_str(), MD);
         }
         // <-------------------------------
       }
@@ -1694,7 +1710,9 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       // Any temporaries created here are conditional.
       eval.begin(*this);
       // MODIFIED: RHO@CODEMIND -------->
-      EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd, TrueBlock, FalseBlock, trace.empty()?trace:trace + ".and4", TrueCount, LH);
+      EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd, TrueBlock, FalseBlock,
+                               trace.empty()?trace:trace + ".and4",
+                               TrueCount, LH);
       // <-------------------------------
       eval.end(*this);
 
@@ -1710,7 +1728,10 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // br(0 || X) -> br(X).
         incrementProfileCounter(CondBOp);
         // MODIFIED: RHO@CODEMIND -------->
-        return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr, TrueBlock, FalseBlock, trace.empty()?trace:trace + ".or1", TrueCount, LH);
+        return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr,
+                                        TrueBlock, FalseBlock,
+                                        trace.empty()?trace:trace + ".or1",
+                                        TrueCount, LH);
         // <-------------------------------
       }
 
@@ -1720,8 +1741,10 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
           !ConstantBool) {
         // br(X || 0) -> br(X).
         // MODIFIED: RHO@CODEMIND -------->
-        return EmitBranchToCounterBlock(CondBOp->getLHS(), BO_LOr, TrueBlock,
-                                        FalseBlock, trace.empty()?trace:trace + ".or2", TrueCount, LH, CondBOp);
+        return EmitBranchToCounterBlock(CondBOp->getLHS(), BO_LOr,
+                                        TrueBlock, FalseBlock,
+                                        trace.empty()?trace:trace + ".or2",
+                                        TrueCount, LH, CondBOp);
         // <-------------------------------
       }
 
@@ -1748,8 +1771,8 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         EmitBlock(LHSFalse);                     
         if(!trace.empty() && !LHSFalse->empty()) {
           cout << ".lhsff" << endl;
-          auto lhs_meta = LHSFalse->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
-          LHSFalse->begin()->setMetadata((trace + ".lhsff").c_str(), lhs_meta);
+          llvm::MDNode *MD = getFileData(CondBOp->getLHS()->getSourceRange());
+          LHSFalse->begin()->setMetadata((trace + ".lhsff").c_str(), MD);
         }
         // <-------------------------------
       }
@@ -1760,7 +1783,8 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       // Any temporaries created here are conditional.
       eval.begin(*this);
       // MODIFIED: RHO@CODEMIND -------->
-      EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr, TrueBlock, FalseBlock,
+      EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr,
+                               TrueBlock, FalseBlock,
                                trace.empty()?trace:trace + ".or4",
                                RHSCount, LH);
       // <-------------------------------
@@ -1779,8 +1803,9 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       LH = static_cast<Stmt::Likelihood>(-LH);
       // Negate the condition and swap the destination blocks.
       // MODIFIED: RHO@CODEMIND -------->
-      return EmitBranchOnBoolExpr(CondUOp->getSubExpr(), FalseBlock, TrueBlock,
-                                  FalseCount, trace.empty()?trace:trace + ".neg", LH);
+      return EmitBranchOnBoolExpr(CondUOp->getSubExpr(), FalseBlock,
+                                  TrueBlock, FalseCount,
+                                  trace.empty()?trace:trace + ".neg", LH);
       // <-------------------------------
     }
   }
@@ -1795,7 +1820,9 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     ConditionalEvaluation cond(*this);
     // MODIFIED: RHO@CODEMIND -------->
     EmitBranchOnBoolExpr(CondOp->getCond(), LHSBlock, RHSBlock,
-                         getProfileCount(CondOp), trace.empty()?trace:trace + ".sel1", Stmt::LH_None);
+                         getProfileCount(CondOp),
+                         trace.empty()?trace:trace + ".sel1",
+                         Stmt::LH_None);
     // <-------------------------------
 
     // When computing PGO branch weights, we only know the overall count for
@@ -1817,7 +1844,8 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       ApplyDebugLocation DL(*this, Cond);
       // MODIFIED: RHO@CODEMIND -------->
       EmitBranchOnBoolExpr(CondOp->getLHS(), TrueBlock, FalseBlock,
-                           LHSScaledTrueCount, trace.empty()?trace:trace + ".sel2", LH);
+                           LHSScaledTrueCount, trace.empty()?trace:trace + ".sel2",
+                           LH);
       // <-------------------------------                           
     }
     cond.end(*this);
@@ -1826,12 +1854,13 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     EmitBlock(RHSBlock);
     // MODIFIED: RHO@CODEMIND -------->
     EmitBranchOnBoolExpr(CondOp->getRHS(), TrueBlock, FalseBlock,
-                         TrueCount - LHSScaledTrueCount, trace.empty()?trace:trace  + ".sel3", LH);
+                         TrueCount - LHSScaledTrueCount,
+                         trace.empty()?trace:trace  + ".sel3", LH);
 
     if(!trace.empty() && !RHSBlock->empty()) {
       cout << ".rhs" << endl;
-      auto rhs_meta = RHSBlock->begin()->getMetadata(llvm::LLVMContext::MD_dbg);
-      RHSBlock->begin()->setMetadata((trace + ".rhs").c_str(), rhs_meta);
+      llvm::MDNode *MD = getFileData(CondOp->getRHS()->getSourceRange());
+      RHSBlock->begin()->setMetadata((trace + ".rhs").c_str(), MD);
     }                         
     // <-------------------------------                         
     cond.end(*this);
@@ -1878,12 +1907,11 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
   // MODIFIED: RHO@CODEMIND -------->
   auto inst = Builder.CreateCondBr(CondV, TrueBlock, FalseBlock, Weights, Unpredictable);
   if(!trace.empty()) {
-    auto inst_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-    inst->setMetadata(trace.c_str(), inst_meta);
+    llvm::MDNode *MD = getFileData(Cond->getSourceRange());
+    inst->setMetadata(trace.c_str(), MD);
 
     auto first = Builder.GetInsertBlock()->getFirstInsertionPt();
-    auto first_meta = first->getMetadata(llvm::LLVMContext::MD_dbg);
-    first->setMetadata(trace.c_str(), first_meta);
+    first->setMetadata(trace.c_str(), MD);
   }
   // <-------------------------------  
 }

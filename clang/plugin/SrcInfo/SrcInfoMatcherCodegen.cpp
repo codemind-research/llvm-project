@@ -8,11 +8,17 @@
 using namespace srcinfo_plugin;
 using namespace srcinfo_matcher_codegen;
 
-class CodegenExprDecl : public CodemindMatcher<SourceInfoConsumer> {
+class CodegenMatcher : public CodemindMatcher<SourceInfoConsumer> {
+  public :
+    CodegenMatcher(SourceInfoConsumer *cs) : CodemindMatcher(cs) {}
+    CodegenItems* getCodegenItem() { return static_cast<CodegenItems*>(consumer->getSourceInfoItem(ItemAttr::CodeGenerator)); }
+};
+
+class CodegenExprDecl : public CodegenMatcher {
   public:
-    CodegenExprDecl(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
-      auto item = static_cast<CodegenItems*>(consumer->getSourceInfoItem(ItemAttr::CodeGenerator));
+    CodegenExprDecl(SourceInfoConsumer *cs) : CodegenMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
+      CodegenItems *item = getCodegenItem();
       SourceManager &SourceMgr = getSourceManager();
       auto e = Results.Nodes.getNodeAs<Expr>("expr");
       auto fd = Results.Nodes.getNodeAs<FunctionDecl>("function");
@@ -25,7 +31,7 @@ class CodegenExprDecl : public CodemindMatcher<SourceInfoConsumer> {
       if (fd->isDefaulted() || fd->isTemplated())
         return;
       if (auto nexpr = dyn_cast<CXXNewExpr>(e))
-        item->addRelation(fd, nexpr->getConstructExpr()->getConstructor());
+        item->addItem(nexpr->getConstructExpr()->getConstructor());
       else if (auto nd = dyn_cast_or_null<NamedDecl>(e->getReferencedDeclOfCallee())) {
         if (nd->getKind() == Decl::Var) {
           auto vd = dyn_cast<VarDecl>(nd);
@@ -36,46 +42,51 @@ class CodegenExprDecl : public CodemindMatcher<SourceInfoConsumer> {
               nd = nexpr->getConstructExpr() != nullptr ? nexpr->getConstructExpr()->getConstructor() : nd;
           }
         }
-        item->addRelation(fd, nd);
+        item->addItem(nd);
       }
     }
 };
 
-class CodegenFunctionDecl : public CodemindMatcher<SourceInfoConsumer> {
+class CodegenFunctionDecl : public CodegenMatcher {
   public:
-    CodegenFunctionDecl(SourceInfoConsumer *c) : CodemindMatcher(c) {}
-    virtual void run(const MatchFinder::MatchResult &Results) {
-      auto item = static_cast<CodegenItems*>(consumer->getSourceInfoItem(ItemAttr::CodeGenerator));
+    CodegenFunctionDecl(SourceInfoConsumer *cs) : CodegenMatcher(cs) {}
+    void run(const MatchFinder::MatchResult &Results) override {
+      CodegenItems *item = getCodegenItem();
       SourceManager &SourceMgr = getSourceManager();
       auto fd = Results.Nodes.getNodeAs<FunctionDecl>("function");
       FullSourceLoc fsr(fd->getBeginLoc(), SourceMgr);
       
       if (item == nullptr)
         return;
-      if (SourceMgr.getMainFileID() != fsr.getFileID())
+      // if (SourceMgr.getMainFileID() != fsr.getFileID())
+      //   return;
+      if (fd->isDefaulted())
         return;
       if (fd->isTemplated())
         return;
-      item->addRelation(fd);
+      item->addItem(fd);
     }
 };
 
-void SourceInfoConsumer::InitCodeGenerator(string path) {
-  setSourceInfoItem(ItemAttr::CodeGenerator, make_shared<CodegenItems>(this, path));
+void SourceInfoConsumer::InitCodeGenerator(set<string> detail) {
+  setSourceInfoItem(ItemAttr::CodeGenerator, make_shared<CodegenItems>(this));
   MatchFinder &finder = getMatchFinder();
 
-  auto codegenExprDecl = make_shared<CodegenExprDecl>(this);
-  addMatcher(codegenExprDecl);
-  finder.addMatcher(
-    expr(
-      anyOf(
-        cxxNewExpr(hasDescendant(cxxConstructExpr())),
-        declRefExpr(),
-        memberExpr()),
-      hasAncestor(functionDecl().bind("function"))
-    ).bind("expr"), codegenExprDecl.get());
+  // auto codegenExprDecl = make_shared<CodegenExprDecl>(this);
+  // addMatcher(codegenExprDecl);
+  // finder.addMatcher(
+  //   expr(
+  //     anyOf(
+  //       cxxNewExpr(hasDescendant(cxxConstructExpr())),
+  //       declRefExpr(),
+  //       memberExpr()),
+  //     hasAncestor(functionDecl().bind("function"))
+  //   ).bind("expr"),
+  //   codegenExprDecl.get());
 
   auto codegenFunctionDecl = make_shared<CodegenFunctionDecl>(this);
   addMatcher(codegenFunctionDecl);
-  finder.addMatcher(functionDecl(unless(isDefaulted())).bind("function"), codegenFunctionDecl.get());
+  finder.addMatcher(
+    functionDecl().bind("function"),
+    codegenFunctionDecl.get());
 }

@@ -1,6 +1,8 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Frontend/FrontendPluginRegistry.h"
 
+#include <sstream>
+
 #include "CodemindUtils.h"
 #include "SrcInfoAction.h"
 #include "SrcInfoConsumer.h"
@@ -24,21 +26,24 @@ bool SourceInfoAction::ParseArgs(const CompilerInstance &ci, const vector<string
   bool show_err = false;
   auto lang = ci.getLangOpts();
   for (unsigned i = 0, size = args.size(); i < size; i++) {
-    auto arg = args[i];
-    if (arg == "-show-error")
+    stringstream arg(args[i]);
+    string key, temp;
+    set<string> detail;
+    getline(arg, key, '=');
+    while (getline(arg, temp, ','))
+      detail.insert(temp);
+
+    if (key == "-show-error")
       show_err = true;
-    else if (arg == "-pre-build")
-      option.pre_build = true;
-    else if (arg == "-build")
-      option.build = true;
-    else if (arg == "-code-gen") {
-      if (i + 1 >= size) {
-        printError();
-        return false;
-      }
-      option.code_generator = true;
-      option.code_generated_path = args[++i];
-    } else if (arg == "-help") {
+    else if (key == "-pre-build")
+      option[ItemAttr::Prebuild] = detail;
+    else if (key == "-build")
+      option[ItemAttr::Build] = detail;
+    else if (key == "-code-gen")
+      option[ItemAttr::CodeGenerator] = detail;
+    else if (key == "-metric") {
+      option[ItemAttr::Metric] = detail;
+    } else if (key == "-help") {
       printHelp();
       return false;
     }
