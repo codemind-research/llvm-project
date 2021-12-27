@@ -1,20 +1,17 @@
 #ifndef CODEMIND_DEBUG
 #define CODEMIND_DEBUG
 
-#include <iostream>
+#include <stdio.h>
 
 #ifdef _WIN32
-  #define NOMINMAX
   #include <Windows.h>
   #include <DbgHelp.h>
-  #undef CALLBACK
+  #pragma comment(lib, "dbghelp.lib")
 #elif __linux__
   #include <execinfo.h>
 #endif
 
 namespace codemind_debug {
-  using namespace std;
-
   void printCallStack() {
     #define BUFFER_SIZE 1024
     void *buffer[BUFFER_SIZE];
@@ -31,28 +28,28 @@ namespace codemind_debug {
       symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
       HANDLE process = GetCurrentProcess();
       SymInitialize(process, NULL, TRUE);
-      int count = CaptureStackBackTrace(0, BUFFER_SIZE, buffer, NULL);
-      cerr << "Found Call Stack: " << count << "\n";
+      unsigned count = CaptureStackBackTrace(0, BUFFER_SIZE, buffer, NULL);
+      fprintf(stderr, "Found Call Stack: %d\n", count);
       for (unsigned i = 0; i < count; i++) {
         displacement = 0;
         address = reinterpret_cast<DWORD64>(buffer[i]);
         SymFromAddr(process, address, NULL, symbol);
         if (SymGetLineFromAddr64(process, address, &displacement, &line))
-          cerr << "  " << line.FileName << ":" << line.LineNumber << "(" << symbol->Name << ")" << " [" << format("0x%x", symbol->Address) << "]\n";
+          fprintf(stderr, "  %s:%lx(%s) [0x%llx]\n", line.FileName, line.LineNumber, symbol->Name, symbol->Address);
         else
-          cerr << "  " << "AnonymousFile(" << symbol->Name << ")" << " [" << format("0x%x", symbol->Address) << "]\n";
+          fprintf(stderr, "  AnonymousFile(%s) [0x%llx]\n", symbol->Name, symbol->Address);
       }
       free(symbol);
     #elif __linux__
       int count = backtrace(buffer, BUFFER_SIZE);
       char **strings = backtrace_symbols(buffer, count);
-      cerr << "Found Call Stack: " << count << "\n";
+      fprintf(stderr, "Found Call Stack: %d\n", count);
       if (strings != NULL) {
         for (int i = 0; i < count; i++)
-          cerr << "  " << strings[i] << "\n";
+          fprintf(stderr, "  %s\n", strings[i]);
         free(strings);
       } else
-        cerr << "  " << "trace symbols print error" << "\n";
+        fprintf(stderr, "  trace symbols print error\n");
     #endif
   }
 }

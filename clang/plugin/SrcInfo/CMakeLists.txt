@@ -2,6 +2,7 @@
 
 add_llvm_library(SrcInfo
                   MODULE
+                    CodemindDebug.cpp
                     CodemindUtils.cpp
                     SrcInfoAction.cpp
                     SrcInfoConsumer.cpp
