@@ -7,6 +7,9 @@
 #include "SrcInfoAction.h"
 #include "SrcInfoConsumer.h"
 
+using namespace std;
+using namespace llvm;
+using namespace clang;
 using namespace codemind_utils;
 using namespace srcinfo_plugin;
 

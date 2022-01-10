@@ -9,6 +9,8 @@
 #include <string>
 
 namespace srcinfo_plugin {
+  using namespace llvm;
+  using namespace clang;
   using namespace codemind_plugin;
 
   enum class ItemAttr {Prebuild, Build, CodeGenerator, Metric};

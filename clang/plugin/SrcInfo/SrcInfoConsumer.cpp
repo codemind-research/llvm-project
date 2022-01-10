@@ -1,5 +1,6 @@
 #include "SrcInfoConsumer.h"
 
+using namespace clang;
 using namespace srcinfo_plugin;
 
 SourceInfoConsumer::SourceInfoConsumer(const CompilerInstance &ci, MatcherOption &option) : CodemindASTConsumer(ci) {

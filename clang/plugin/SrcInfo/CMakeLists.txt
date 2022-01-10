@@ -1,7 +1,12 @@
 #set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(Protobuf REQUIRED)
+include_directories(${Protobuf_INCLUDE_DIRS})
+add_definitions(-DGOOGLE_PROTOBUF_NO_RTTI)
 add_llvm_library(SrcInfo
                   MODULE
+                    cxxinfo.pb.cc
+                    funinfo.pb.cc
                     CodemindDebug.cpp
                     CodemindUtils.cpp
                     SrcInfoAction.cpp
@@ -18,12 +23,17 @@ add_llvm_library(SrcInfo
                     clang
                 )
 
-if(LLVM_ENABLE_PLUGINS AND (WIN32 OR CYGWIN))
-  set(LLVM_LINK_COMPONENTS Support)
-  clang_target_link_libraries(SrcInfo PRIVATE
-    clangAST
-    clangASTMatchers
-    clangBasic
-    clangFrontend
-   )
+if(LLVM_ENABLE_PLUGINS)
+  if ((WIN32 OR CYGWIN))
+    set(LLVM_LINK_COMPONENTS Support)
+    clang_target_link_libraries(SrcInfo PRIVATE
+      clangAST
+      clangASTMatchers
+      clangBasic
+      clangFrontend
+      ${Protobuf_LIBRARIES}
+    )
+  else()
+    clang_target_link_libraries(SrcInfo PRIVATE ${Protobuf_LIBRARIES})
+  endif()
 endif()

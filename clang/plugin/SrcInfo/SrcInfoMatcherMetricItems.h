@@ -12,6 +12,7 @@
 
 namespace srcinfo_matcher_codegen {
   using namespace llvm;
+  using namespace clang;
   using namespace srcinfo_plugin;
   
   class MetricItems : public SourceInfoItems {

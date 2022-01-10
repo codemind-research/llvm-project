@@ -5,6 +5,8 @@
 #include "SrcInfoConsumer.h"
 #include "SrcInfoMatcherMetricItems.h"
 
+using namespace std;
+using namespace clang;
 using namespace srcinfo_plugin;
 using namespace srcinfo_matcher_codegen;
 

@@ -12,6 +12,8 @@
 #include "SrcInfoConsumer.h"
 
 namespace srcinfo_plugin {
+  using namespace llvm;
+  using namespace clang;
   using namespace codemind_plugin;
 
   class SourceInfoAction : public CodemindASTAction {

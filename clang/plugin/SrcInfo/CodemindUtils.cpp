@@ -1,22 +1,25 @@
+#include "clang/AST/Type.h"
+
 #include "CodemindUtils.h"
+
+using namespace std;
+using namespace clang;
 
 namespace codemind_utils {
   /* declaration */
-  vector<string> getTemplateArgumentToString(const TemplateArgument &ta);
   string getTemplateArgumentListToString(const TemplateArgumentList *list);
   string getTemplateParameterListToString(const TemplateParameterList *list);
-  string getQualifiedNameString(const DeclContext *dc, bool showTmpl);
-  string getNamespaceName(const DeclContext *dc);
-  string getRecordName(const RecordDecl *rd, bool showTmpl);
   string getFunctionName(const FunctionDecl *fd, bool showTmpl);
   string getMethodName(const CXXMethodDecl *md, bool showTmpl);
+  string getRecordName(const RecordDecl *rd, bool showTmpl);
+  string getNamespaceName(const DeclContext *dc);
 
   /* implementation */
   string getQualifiedTypeString(QualType qt, bool showTmpl) {
     string reference = "", array = "";
     bool prefix_const = false, suffix_const = false;
-    if (qt->isArrayType()) {
-      array = " [";
+    while (qt->isArrayType()) {
+      array = "[";
       if (auto type = dyn_cast<ConstantArrayType>(qt->getAsArrayTypeUnsafe()))
         array += to_string(*(type->getSize().getRawData()));
       array += "]";
@@ -26,8 +29,8 @@ namespace codemind_utils {
       suffix_const = true;
       qt = qt.getLocalUnqualifiedType();
     }
-    while (qt->isPointerType() || qt->isReferenceType()) {
-      reference += (qt->isPointerType() ? "*" : "&");
+    while (!qt->isTypedefNameType() && (qt->isPointerType() || qt->isReferenceType())) {
+      reference += (qt->isPointerType() ? "*" : (qt->isLValueReferenceType() ? "&" : "&&"));
       qt = qt->getPointeeType();
     }
     if (qt.isLocalConstQualified()) {
@@ -35,102 +38,61 @@ namespace codemind_utils {
       qt = qt.getLocalUnqualifiedType();
     }
 
-    return ((prefix_const) ? "const " : "") +
-           ((qt->isRecordType()) ? getRecordName(qt->getAsRecordDecl(), showTmpl) : (qt.getAsString())) +
-           reference + array +
+    string name = "";
+    if (qt->isRecordType())
+      name = getRecordName(qt->getAsRecordDecl(), showTmpl);
+    else if (auto tt = dyn_cast<TypedefType>(qt.getTypePtr())) {
+      name = getQualifiedNameString(tt->getDecl()->getDeclContext(), showTmpl);
+      name += (name.empty() ? "" : "::") + tt->getDecl()->getNameAsString();
+    } else if (auto tst = dyn_cast<TemplateSpecializationType>(qt.getTypePtr())) {
+      vector<string> vstr;
+      for (auto arg : tst->template_arguments())
+        concatVector<string>(vstr, TemplateArgumentToVector<string>(arg, [](QualType qt){ return getQualifiedTypeString(qt); }));
+      name = tst->getTemplateName().getAsTemplateDecl()->getNameAsString();
+      name += "<" + VectorToString<string>(vstr, [](string e){  return e; }, ",") + ">";
+    } else if (auto pt = dyn_cast<ParenType>(qt.getTypePtr()))
+      name = getQualifiedTypeString(pt->getInnerType());
+    else if (auto ft = dyn_cast<FunctionProtoType>(qt.getTypePtr())) {
+      vector<string> vstr;
+      for (auto param : ft->param_types())
+        vstr.push_back(getQualifiedTypeString(param, showTmpl));
+      name = getQualifiedTypeString(ft->getReturnType());
+      name += " (" + VectorToString<string>(vstr, [](string e){ return e; }, ",") + ")";
+    } else 
+      name = qt.getAsString();
+
+    return ((prefix_const) ? "const " : "") + name +
+           reference + ((!array.empty()) ? " " : "") + array +
            ((suffix_const) ? " const" : "");
   }
 
-  string getQualifiedNameString(const NamedDecl *decl, bool showTmpl) {
+  string getQualifiedNameString(const DeclContext *decl, bool showTmpl) {
     if (decl == nullptr)
       return "";
-    auto result = decl->getNameAsString();
-    if (auto rd = dyn_cast<RecordDecl>(decl))
-      result = getRecordName(rd, showTmpl);
+    else if (auto nd = dyn_cast<NamespaceDecl>(decl))
+      return getNamespaceName(nd);
+    else if (auto rd = dyn_cast<RecordDecl>(decl))
+      return getRecordName(rd, showTmpl);
     else if (auto md = dyn_cast<CXXMethodDecl>(decl))
-      result = getMethodName(md, showTmpl);
+      return getMethodName(md, showTmpl);
     else if (auto fd = dyn_cast<FunctionDecl>(decl))
-      result = getFunctionName(fd, showTmpl);
-    return result;
-  }
-
-  vector<string> getTemplateArgumentToString(const TemplateArgument &ta) {
-    vector<string> result;
-    switch (ta.getKind()) {
-      case TemplateArgument::ArgKind::Type : {
-        QualType qt = ta.getAsType();
-        result.push_back(getQualifiedTypeString(qt));
-        break;
-      }
-      case TemplateArgument::ArgKind::Integral : {
-        QualType qt = ta.getIntegralType();
-        result.push_back(getQualifiedTypeString(qt));
-        break;
-      }
-      case TemplateArgument::ArgKind::Pack : {
-        auto pack = ta.pack_elements();
-        for (unsigned i = 0; i < pack.size(); i++) {
-          auto packs = getTemplateArgumentToString(pack[i]);
-          result.insert(result.end(), packs.begin(), packs.end());
-        }
-        break;
-      }
-      default :
-        break;
-    }
-    return result;
+      return getFunctionName(fd, showTmpl);
+    else
+      return "";
   }
 
   string getTemplateArgumentListToString(const TemplateArgumentList *list) {
-    if (list == nullptr)
-      return "";
-    vector<string> args;
-    for (unsigned i = 0; i < list->size(); i++ ) {
-      auto arg = getTemplateArgumentToString(list->get(i));
-      if (!arg.empty())
-        args.insert(args.end(), arg.begin(), arg.end());
-    }
-
-    return "<" + VectorToString<string>(args, [](string arg){ return arg; }, ",") + ">";
+    auto vstr = getTemplateArgumentListToVector<string>(list, [](QualType qt){ return getQualifiedTypeString(qt); });
+    return "<" + VectorToString<string>(vstr, [](string e){ return e; }, ",") + ">";
   }
 
   string getTemplateParameterListToString(const TemplateParameterList *list) {
-    if (list == nullptr)
-      return "";
-    vector<string> args;
-    for (unsigned i = 0; i < list->size(); i++ )
-      args.push_back("type_" + to_string(i));
-
-    return "<" + VectorToString<string>(args, [](string arg){ return arg; }, ",") + ">";
-  }
-  string getNamespaceName(const DeclContext *dc) {
-    if (dc == nullptr)
-      return "";
-    vector<const DeclContext*> list;
-    dc = dc->getEnclosingNamespaceContext();
-    while (isa<NamespaceDecl>(dc) && find(list.begin(), list.end(), dc) == list.end()) {
-      list.push_back(dc);
-      dc = dc->getParent()->getEnclosingNamespaceContext();
+    vector<string> vstr;
+    if (list != nullptr) {
+      for (unsigned i = 0; i < list->size(); i++ )
+        vstr.push_back("type_" + to_string(i));
     }
-    reverse(list.begin(), list.end());
-    return VectorToString<const DeclContext*>(list, [](const DeclContext* arg){ return dyn_cast<NamespaceDecl>(arg)->getNameAsString(); }, "::");
-  }
-
-  string getRecordName(const RecordDecl *rd, bool showTmpl) {
-    if (rd == nullptr)
-      return ""; 
-    string result = "";
-    auto ord = cast<RecordDecl>(rd->getParent());
-    result = (ord != nullptr && ord->isRecord()) ? getRecordName(ord, showTmpl) : getNamespaceName(rd);
-    result += (result.empty() ? "" : "::");
-    result += (rd->getNameAsString().empty() ? "(" + to_string(rd->getID()) + ")" : rd->getNameAsString());
-    if (showTmpl) {
-      if (auto trd = dyn_cast<ClassTemplateSpecializationDecl>(rd))
-        result += getTemplateArgumentListToString(&trd->getTemplateInstantiationArgs());
-      else if (auto list = rd->getDescribedTemplateParams())
-        result += getTemplateParameterListToString(list);
-    }
-    return result;
+    return "<" + VectorToString<string>(vstr, [](string e){ return e; }, ",") + ">";
   }
 
   string getFunctionName(const FunctionDecl *fd, bool showTmpl) {
@@ -151,5 +113,35 @@ namespace codemind_utils {
     if (md == nullptr)
       return "";
     return getRecordName(md->getParent(), showTmpl) + "::" + md->getNameAsString();
+  }
+
+  string getRecordName(const RecordDecl *rd, bool showTmpl) {
+    if (rd == nullptr)
+      return ""; 
+    string result = "";
+    auto parent = rd->getParent();
+    result = (parent != rd && parent->isRecord()) ? getRecordName(cast<RecordDecl>(parent), showTmpl) : getNamespaceName(rd);
+    result += (result.empty() ? "" : "::");
+    result += (rd->getNameAsString().empty() ? "(" + to_string(rd->getID()) + ")" : rd->getNameAsString());
+    if (showTmpl) {
+      if (auto trd = dyn_cast<ClassTemplateSpecializationDecl>(rd))
+        result += getTemplateArgumentListToString(&trd->getTemplateInstantiationArgs());
+      else if (auto list = rd->getDescribedTemplateParams())
+        result += getTemplateParameterListToString(list);
+    }
+    return result;
+  }
+
+  string getNamespaceName(const DeclContext *dc) {
+    if (dc == nullptr)
+      return "";
+    vector<const DeclContext*> list;
+    dc = dc->getEnclosingNamespaceContext();
+    while (isa<NamespaceDecl>(dc) && find(list.begin(), list.end(), dc) == list.end()) {
+      list.push_back(dc);
+      dc = dc->getParent()->getEnclosingNamespaceContext();
+    }
+    reverse(list.begin(), list.end());
+    return VectorToString<const DeclContext*>(list, [](const DeclContext* arg){ return dyn_cast<NamespaceDecl>(arg)->getNameAsString(); }, "::");
   }
 }

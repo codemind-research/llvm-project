@@ -10,6 +10,8 @@
 #include "SrcInfoConsumer.h"
 
 namespace srcinfo_matcher_build {
+  using namespace llvm;
+  using namespace clang;
   using namespace srcinfo_plugin;
 
   class BuildItems : public SourceInfoItems {

@@ -7,6 +7,7 @@
 #include "CodemindUtils.h"
 #include "SrcInfoMatcherMetricItems.h"
 
+using namespace clang;
 using namespace codemind_utils;
 using namespace srcinfo_matcher_codegen;
 
@@ -52,7 +53,7 @@ size_t MetricItems::getNameID(const NamedDecl *nd) {
             "NI-",
             id, "'",
             SourceMgr.getFilename(fsl.getFileLoc()).str(), "'",
-            getQualifiedNameString(nd, false), "'",
+            getQualifiedNameString(nd->getDeclContext(), false), "'",
             SourceMgr.getExpansionLineNumber(nd->getBeginLoc()), "'",
             SourceMgr.getExpansionColumnNumber(nd->getBeginLoc()), "\n");
     return id;

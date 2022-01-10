@@ -5,25 +5,25 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/Mangle.h"
 
-#include <map>
 #include <memory>
+#include <set>
 
 #include "SrcInfoConsumer.h"
 
 namespace srcinfo_matcher_codegen {
   using namespace llvm;
+  using namespace clang;
   using namespace srcinfo_plugin;
   
   class CodegenItems : public SourceInfoItems {
     private:
+      string filename;
       SourceInfoConsumer *consumer;
-      map<string, size_t> cached_type;
-      map<const NamedDecl*, size_t> cached_function;
+      set<const Decl*> cached_decl;
     public:
-      CodegenItems(SourceInfoConsumer *ci);
+      CodegenItems(SourceInfoConsumer *ci, set<string> detail);
       void finalize() override;
-      size_t addType(QualType qt);
-      size_t addItem(const NamedDecl *nd);
+      void addItem(const NamedDecl *nd);
   };
 }
 
