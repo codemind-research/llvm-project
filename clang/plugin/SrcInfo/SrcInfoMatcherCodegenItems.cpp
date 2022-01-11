@@ -9,11 +9,8 @@
 #include <vector>
 #include <tuple>
 
-// #define __TEST_MODE_
-#ifndef __TEST_MODE_
 #include "cxxinfo.pb.h"
 #include "funinfo.pb.h"
-#endif
 #include "CodemindUtils.h"
 #include "SrcInfoMatcherCodegenItems.h"
 
@@ -32,7 +29,6 @@ CodegenItems::CodegenItems(SourceInfoConsumer *ci, set<string> detail) : consume
 }
 
 void CodegenItems::finalize() {
-  #ifndef __TEST_MODE_
   SourceManager &SourceMgr = consumer->getSourceManager();
   int id = 1; // protobuf3에서 default와 NoneValue가 차이가 없어 1부터 시작
   cxxinfo::Info hi;
@@ -216,9 +212,7 @@ void CodegenItems::finalize() {
     func->set_name(fd->getNameAsString());
     func->set_is_varg(fd->isVariadic());
     if (auto list = fd->getTemplateSpecializationArgs()) {
-      vector<int> tparams;
-      tparams = getTemplateArgumentsToVector<int>(list->asArray(), setHighlanderType);
-      for (auto param : tparams)
+      for (auto param : getTemplateArgumentsToVector<int>(list->asArray(), setHighlanderType))
         func->add_tparams(param);
     }
     func->set_ret_type(setHighlanderType(fd->getReturnType()));
@@ -226,15 +220,15 @@ void CodegenItems::finalize() {
       setHighlanderVar(func->add_params(), param, setHighlanderType);
     for (auto redecl : fd->redecls()) {
       setHighlanderLoc(func->add_decl_pos(),
-                    SourceMgr.getExpansionLineNumber(redecl->getBeginLoc()),
-                    SourceMgr.getExpansionColumnNumber(redecl->getBeginLoc()));
+                       SourceMgr.getExpansionLineNumber(redecl->getBeginLoc()),
+                       SourceMgr.getExpansionColumnNumber(redecl->getBeginLoc()));
     }
     if (fd->hasBody()) {
       setHighlanderRange(func->mutable_body_range(),
-                      SourceMgr.getExpansionLineNumber(fd->getBody()->getBeginLoc()),
-                      SourceMgr.getExpansionColumnNumber(fd->getBody()->getBeginLoc()),
-                      SourceMgr.getExpansionLineNumber(fd->getBody()->getEndLoc()),
-                      SourceMgr.getExpansionColumnNumber(fd->getBody()->getEndLoc()));
+                         SourceMgr.getExpansionLineNumber(fd->getBody()->getBeginLoc()),
+                         SourceMgr.getExpansionColumnNumber(fd->getBody()->getBeginLoc()),
+                         SourceMgr.getExpansionLineNumber(fd->getBody()->getEndLoc()),
+                         SourceMgr.getExpansionColumnNumber(fd->getBody()->getEndLoc()));
       auto filename = SourceMgr.getPresumedLoc(fd->getBody()->getBeginLoc()).getFilename();
       if (file_map.find(filename) == file_map.end()) {
         file_map[filename] = id++;
@@ -249,17 +243,21 @@ void CodegenItems::finalize() {
       record_map[rd] = setHighlanderNamespace(rd->getParent())->add_records();
       record_map[rd]->set_id(id++);
       record_map[rd]->set_type_id(setHighlanderType(rd->getTypeForDecl()->getCanonicalTypeInternal()));
-      // body_range
+      setHighlanderRange(record_map[rd]->mutable_body_range(),
+                         SourceMgr.getExpansionLineNumber(rd->getBraceRange().getBegin()),
+                         SourceMgr.getExpansionColumnNumber(rd->getBraceRange().getBegin()),
+                         SourceMgr.getExpansionLineNumber(rd->getBraceRange().getEnd()),
+                         SourceMgr.getExpansionColumnNumber(rd->getBraceRange().getEnd()));
       if (auto crd = dyn_cast<CXXRecordDecl>(rd)) {
         for (auto base : crd->bases()) 
           record_map[rd]->add_parents(setHighlanderRecord(base.getType()->getAsRecordDecl())->id());
         for (auto decl : crd->decls()) {
           if (isa<AccessSpecDecl>(decl)) {
             setHighlanderRange(record_map[rd]->add_access_specifiers(),
-                            SourceMgr.getExpansionLineNumber(decl->getBeginLoc()),
-                            SourceMgr.getExpansionColumnNumber(decl->getBeginLoc()),
-                            SourceMgr.getExpansionLineNumber(decl->getEndLoc()),
-                            SourceMgr.getExpansionColumnNumber(decl->getEndLoc()));
+                               SourceMgr.getExpansionLineNumber(decl->getBeginLoc()),
+                               SourceMgr.getExpansionColumnNumber(decl->getBeginLoc()),
+                               SourceMgr.getExpansionLineNumber(decl->getEndLoc()),
+                               SourceMgr.getExpansionColumnNumber(decl->getEndLoc()));
           }
         }
       }
@@ -273,11 +271,14 @@ void CodegenItems::finalize() {
       auto method = setHighlanderRecord(rd)->add_methods();
       setHighlanderFunction(method->mutable_func(), md);
       method->set_is_virtual(md->isVirtual());
+      // is_defined_in_class_decl
+      // pure_virtual_pos
+
       // setHighlanderRange(method->mutable_pure_virtual_pos(),
-      //                 SourceMgr.getExpansionLineNumber(md->getBeginLoc()),
-      //                 SourceMgr.getExpansionColumnNumber(md->getBeginLoc()),
-      //                 SourceMgr.getExpansionLineNumber(md->getEndLoc()),
-      //                 SourceMgr.getExpansionColumnNumber(md->getEndLoc()));
+      //                    SourceMgr.getExpansionLineNumber(md->getBeginLoc()),
+      //                    SourceMgr.getExpansionColumnNumber(md->getBeginLoc()),
+      //                    SourceMgr.getExpansionLineNumber(md->getEndLoc()),
+      //                    SourceMgr.getExpansionColumnNumber(md->getEndLoc()));
 
       // outs() << md->getQualifiedNameAsString() <<  "  " << md->isPure() << "  ";
       // outs() << format("%d:%d-%d:%d", SourceMgr.getExpansionLineNumber(md->getBeginLoc()),
@@ -299,7 +300,6 @@ void CodegenItems::finalize() {
   fstream output(info_path, ios::out | ios::trunc | ios::binary);
   if (!hi.SerializeToOstream(&output))
     writeTo(errs(), "Failed to write", "\n");
-  #endif
 }
 
 void CodegenItems::addItem(const NamedDecl *nd) {
