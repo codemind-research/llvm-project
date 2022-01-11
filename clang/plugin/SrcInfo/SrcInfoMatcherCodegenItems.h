@@ -17,7 +17,8 @@ namespace srcinfo_matcher_codegen {
   
   class CodegenItems : public SourceInfoItems {
     private:
-      string filename;
+      string info_path;
+      string funcs_path;
       SourceInfoConsumer *consumer;
       set<const Decl*> cached_decl;
     public:

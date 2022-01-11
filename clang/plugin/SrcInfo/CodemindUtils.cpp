@@ -7,8 +7,8 @@ using namespace clang;
 
 namespace codemind_utils {
   /* declaration */
-  string getTemplateArgumentListToString(const TemplateArgumentList *list);
-  string getTemplateParameterListToString(const TemplateParameterList *list);
+  string getTemplateArgumentsToString(ArrayRef<TemplateArgument> array);
+  string getTemplateParametersToString(ArrayRef<const NamedDecl*> array);
   string getFunctionName(const FunctionDecl *fd, bool showTmpl);
   string getMethodName(const CXXMethodDecl *md, bool showTmpl);
   string getRecordName(const RecordDecl *rd, bool showTmpl);
@@ -39,25 +39,23 @@ namespace codemind_utils {
     }
 
     string name = "";
-    if (qt->isRecordType())
+    if (qt->isRecordType()) {
       name = getRecordName(qt->getAsRecordDecl(), showTmpl);
-    else if (auto tt = dyn_cast<TypedefType>(qt.getTypePtr())) {
+    } else if (auto tt = dyn_cast<TypedefType>(qt.getTypePtr())) {
       name = getQualifiedNameString(tt->getDecl()->getDeclContext(), showTmpl);
       name += (name.empty() ? "" : "::") + tt->getDecl()->getNameAsString();
-    } else if (auto tst = dyn_cast<TemplateSpecializationType>(qt.getTypePtr())) {
-      vector<string> vstr;
-      for (auto arg : tst->template_arguments())
-        concatVector<string>(vstr, TemplateArgumentToVector<string>(arg, [](QualType qt){ return getQualifiedTypeString(qt); }));
-      name = tst->getTemplateName().getAsTemplateDecl()->getNameAsString();
-      name += "<" + VectorToString<string>(vstr, [](string e){  return e; }, ",") + ">";
-    } else if (auto pt = dyn_cast<ParenType>(qt.getTypePtr()))
+    } else if (auto et = dyn_cast_or_null<ElaboratedType>(qt.getTypePtr())) {
+      name = getQualifiedTypeString(et->desugar());
+    } else if (auto pt = dyn_cast<ParenType>(qt.getTypePtr())) {
       name = getQualifiedTypeString(pt->getInnerType());
-    else if (auto ft = dyn_cast<FunctionProtoType>(qt.getTypePtr())) {
+    } else if (auto ft = dyn_cast<FunctionProtoType>(qt.getTypePtr())) {
       vector<string> vstr;
-      for (auto param : ft->param_types())
-        vstr.push_back(getQualifiedTypeString(param, showTmpl));
       name = getQualifiedTypeString(ft->getReturnType());
       name += " (" + VectorToString<string>(vstr, [](string e){ return e; }, ",") + ")";
+    } else if (auto tst = dyn_cast<TemplateSpecializationType>(qt.getTypePtr())) {
+      vector<string> vstr;
+      name = tst->getTemplateName().getAsTemplateDecl()->getNameAsString();
+      name += getTemplateArgumentsToString(tst->template_arguments());
     } else 
       name = qt.getAsString();
 
@@ -81,17 +79,15 @@ namespace codemind_utils {
       return "";
   }
 
-  string getTemplateArgumentListToString(const TemplateArgumentList *list) {
-    auto vstr = getTemplateArgumentListToVector<string>(list, [](QualType qt){ return getQualifiedTypeString(qt); });
+  string getTemplateArgumentsToString(ArrayRef<TemplateArgument> array) {
+    auto vstr = getTemplateArgumentsToVector<string>(array, [](QualType qt){ return getQualifiedTypeString(qt); });
     return "<" + VectorToString<string>(vstr, [](string e){ return e; }, ",") + ">";
   }
 
-  string getTemplateParameterListToString(const TemplateParameterList *list) {
+  string getTemplateParametersToString(ArrayRef<const NamedDecl*> array) {
     vector<string> vstr;
-    if (list != nullptr) {
-      for (unsigned i = 0; i < list->size(); i++ )
-        vstr.push_back("type_" + to_string(i));
-    }
+    for (unsigned i = 0; i < array.size(); i++ )
+      vstr.push_back("type_" + to_string(i));
     return "<" + VectorToString<string>(vstr, [](string e){ return e; }, ",") + ">";
   }
 
@@ -102,9 +98,9 @@ namespace codemind_utils {
     result += ((result.empty()) ? "" : "::") + fd->getNameAsString();
     if (showTmpl) {
       if (auto list = fd->getTemplateSpecializationArgs()) {
-        result += getTemplateArgumentListToString(list);
+        result += getTemplateArgumentsToString(list->asArray());
       } else if (auto list = fd->getDescribedTemplateParams())
-        result += getTemplateParameterListToString(list);
+        result += getTemplateParametersToString(list->asArray());
     }
     return result;
   }
@@ -125,9 +121,9 @@ namespace codemind_utils {
     result += (rd->getNameAsString().empty() ? "(" + to_string(rd->getID()) + ")" : rd->getNameAsString());
     if (showTmpl) {
       if (auto trd = dyn_cast<ClassTemplateSpecializationDecl>(rd))
-        result += getTemplateArgumentListToString(&trd->getTemplateInstantiationArgs());
+        result += getTemplateArgumentsToString(trd->getTemplateArgs().asArray());
       else if (auto list = rd->getDescribedTemplateParams())
-        result += getTemplateParameterListToString(list);
+        result += getTemplateParametersToString(list->asArray());
     }
     return result;
   }

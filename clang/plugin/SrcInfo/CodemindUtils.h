@@ -74,12 +74,10 @@ namespace codemind_utils {
   }
 
   template<typename Type>
-  vector<Type> getTemplateArgumentListToVector(const TemplateArgumentList *list, function<Type(QualType)> func) {
+  vector<Type> getTemplateArgumentsToVector(ArrayRef<TemplateArgument> array, function<Type(QualType)> func) {
     vector<Type> result;
-    if (list == nullptr)
-      return result;
-    for (unsigned i = 0; i < list->size(); i++ )
-      concatVector<Type>(result, TemplateArgumentToVector(list->get(i), func));
+    for (auto element : array)
+      concatVector<Type>(result, TemplateArgumentToVector(element, func));
     return result;
   }
 }
