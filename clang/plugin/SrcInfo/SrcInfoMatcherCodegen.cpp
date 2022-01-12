@@ -23,8 +23,8 @@ class CodegenFunctionDecl : public CodegenMatcher {
       CodegenItems *item = getCodegenItem();
       auto fd = Results.Nodes.getNodeAs<FunctionDecl>("function");
       
-      // if (getSourceManager().getMainFileID() != FullSourceLoc(fd->getLocation(), getSourceManager()).getFileID())
-      //   return;
+      if (getSourceManager().getMainFileID() != FullSourceLoc(fd->getLocation(), getSourceManager()).getFileID())
+        return;
       if (item == nullptr)
         return;
       if (fd->isDefaulted() || fd->isTemplated() || !fd->isFirstDecl())
@@ -40,8 +40,8 @@ class CodegenVarDecl : public CodegenMatcher {
       CodegenItems *item = getCodegenItem();
       auto vd = Results.Nodes.getNodeAs<VarDecl>("var");
       
-      // if (getSourceManager().getMainFileID() != FullSourceLoc(vd->getLocation(), getSourceManager()).getFileID())
-      //   return;
+      if (getSourceManager().getMainFileID() != FullSourceLoc(vd->getLocation(), getSourceManager()).getFileID())
+        return;
       if (item == nullptr)
         return;
       if (vd->isTemplated())

@@ -7,7 +7,6 @@
 #include "CodemindUtils.h"
 #include "SrcInfoMatcherMetricItems.h"
 
-using namespace clang;
 using namespace codemind_utils;
 using namespace srcinfo_matcher_codegen;
 

@@ -7,8 +7,6 @@
 #include "SrcInfoConsumer.h"
 #include "SrcInfoMatcherBuildItems.h"
 
-using namespace std;
-using namespace clang;
 using namespace codemind_utils;
 using namespace srcinfo_plugin;
 using namespace srcinfo_matcher_build;

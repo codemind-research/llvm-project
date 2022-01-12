@@ -2,9 +2,6 @@
 
 #include "CodemindUtils.h"
 
-using namespace std;
-using namespace clang;
-
 namespace codemind_utils {
   /* declaration */
   string getTemplateArgumentsToString(ArrayRef<TemplateArgument> array);
@@ -17,7 +14,7 @@ namespace codemind_utils {
   /* implementation */
   string getQualifiedTypeString(QualType qt, bool showTmpl) {
     string reference = "", array = "";
-    bool prefix_const = false, suffix_const = false;
+    bool isConstant = false, isVolatile = false, isRestrict = false, isPtrConst = false;
     while (qt->isArrayType()) {
       array = "[";
       if (auto type = dyn_cast<ConstantArrayType>(qt->getAsArrayTypeUnsafe()))
@@ -26,17 +23,17 @@ namespace codemind_utils {
       qt = qt->getAsArrayTypeUnsafe()->getElementType();
     }
     if (qt->isAnyPointerType() && qt.isLocalConstQualified()) {
-      suffix_const = true;
-      qt = qt.getLocalUnqualifiedType();
+      isPtrConst = true;
+      qt.removeLocalConst();
     }
     while (!qt->isTypedefNameType() && (qt->isPointerType() || qt->isReferenceType())) {
       reference += (qt->isPointerType() ? "*" : (qt->isLValueReferenceType() ? "&" : "&&"));
       qt = qt->getPointeeType();
     }
-    if (qt.isLocalConstQualified()) {
-      prefix_const = true;
-      qt = qt.getLocalUnqualifiedType();
-    }
+    isRestrict = qt.isRestrictQualified();
+    isVolatile = qt.isVolatileQualified();
+    isConstant = qt.isLocalConstQualified();
+    qt = qt.getLocalUnqualifiedType();
 
     string name = "";
     if (qt->isRecordType()) {
@@ -59,9 +56,12 @@ namespace codemind_utils {
     } else 
       name = qt.getAsString();
 
-    return ((prefix_const) ? "const " : "") + name +
-           reference + ((!array.empty()) ? " " : "") + array +
-           ((suffix_const) ? " const" : "");
+    return string((isRestrict) ? "restrict " : "") +
+           string((isVolatile) ? "volatile " : "") +
+           string((isConstant) ? "const " : "") +
+           name + reference +
+           string((!array.empty()) ? " " : "") + array +
+           string((isPtrConst) ? " const" : "");
   }
 
   string getQualifiedNameString(const DeclContext *decl, bool showTmpl) {

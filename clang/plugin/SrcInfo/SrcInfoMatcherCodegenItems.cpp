@@ -14,14 +14,9 @@
 #include "CodemindUtils.h"
 #include "SrcInfoMatcherCodegenItems.h"
 
-using namespace std;
-using namespace clang;
+using namespace highlander::proto;
 using namespace codemind_utils;
 using namespace srcinfo_matcher_codegen;
-
-#ifndef __TEST_MODE_
-using namespace highlander::proto;
-#endif
 
 CodegenItems::CodegenItems(SourceInfoConsumer *ci, set<string> detail) : consumer(ci) {
   for (auto str : detail)
@@ -116,9 +111,16 @@ void CodegenItems::finalize() {
       } else if (qt->isRValueReferenceType()) {
         auto trref = type->mutable_trref();
         trref->set_type_id(setHighlanderType(qt->getPointeeType()));
+      } else if (qt.isRestrictQualified()) {
+        qt.removeLocalRestrict();
+        setTypeData(type, qt);
+      } else if (qt.isVolatileQualified()) {
+        qt.removeLocalVolatile();
+        setTypeData(type, qt);
       } else if (qt.isLocalConstQualified()) {
+        qt.removeLocalConst();
         auto tconst = type->mutable_tconst();
-        tconst->set_type_id(setHighlanderType(qt.getLocalUnqualifiedType()));
+        tconst->set_type_id(setHighlanderType(qt));
       } else if (qt->isRecordType()) {
         vector<int> tparams;
         if (auto trd = dyn_cast<ClassTemplateSpecializationDecl>(qt->getAsRecordDecl()))
@@ -264,31 +266,39 @@ void CodegenItems::finalize() {
     }
     return record_map[rd];
   };
+  auto findToken = [&](SourceRange range, tok::TokenKind kind, Token &result) {
+    auto lang = consumer->getLangOpts();
+    for (auto curr = range.getBegin(); curr <= range.getEnd(); curr = result.getEndLoc()) {
+      if (!Lexer::getRawToken(curr, result, SourceMgr, lang, true) && result.getKind() == kind)
+        return true;
+    }
+    return false;
+  };
 
   for (auto decl : cached_decl) {
     if (auto md = dyn_cast<CXXMethodDecl>(decl)) {
       auto rd = md->getParent();
       auto method = setHighlanderRecord(rd)->add_methods();
+      auto isInClass = false;
+      if (md->hasBody()) {
+        auto bline = SourceMgr.getExpansionLineNumber(md->getBody()->getBeginLoc());
+        isInClass = bline >= SourceMgr.getExpansionLineNumber(rd->getBraceRange().getBegin()) &&
+                    bline <= SourceMgr.getExpansionLineNumber(rd->getBraceRange().getEnd());
+      }
       setHighlanderFunction(method->mutable_func(), md);
       method->set_is_virtual(md->isVirtual());
-      // is_defined_in_class_decl
-      // pure_virtual_pos
-
-      // setHighlanderRange(method->mutable_pure_virtual_pos(),
-      //                    SourceMgr.getExpansionLineNumber(md->getBeginLoc()),
-      //                    SourceMgr.getExpansionColumnNumber(md->getBeginLoc()),
-      //                    SourceMgr.getExpansionLineNumber(md->getEndLoc()),
-      //                    SourceMgr.getExpansionColumnNumber(md->getEndLoc()));
-
-      // outs() << md->getQualifiedNameAsString() <<  "  " << md->isPure() << "  ";
-      // outs() << format("%d:%d-%d:%d", SourceMgr.getExpansionLineNumber(md->getBeginLoc()),
-      //                                 SourceMgr.getExpansionColumnNumber(md->getBeginLoc()),
-      //                                 SourceMgr.getExpansionLineNumber(md->getEndLoc()),
-      //                                 SourceMgr.getExpansionColumnNumber(md->getEndLoc()));
-      // outs() << "\n";
-      // auto func = mi.add_funcs();
-      // auto ns = setHighlanderNamespace(rd->getParent());
-      
+      method->set_is_defined_in_class_decl(isInClass);
+      if (md->isPure()) {
+        Token token;
+        auto range = md->getSourceRange();
+        while (findToken(range, tok::TokenKind::r_paren, token))
+          range.setBegin(token.getEndLoc());
+        setHighlanderRange(method->mutable_pure_virtual_pos(),
+                           SourceMgr.getExpansionLineNumber(range.getBegin()),
+                           SourceMgr.getExpansionColumnNumber(range.getBegin()),
+                           SourceMgr.getExpansionLineNumber(range.getEnd()),
+                           SourceMgr.getExpansionColumnNumber(range.getEnd()));
+      }
     } else if (auto fd = dyn_cast<FunctionDecl>(decl)) {
       auto ns = setHighlanderNamespace(decl->getDeclContext()->getParent());
       setHighlanderFunction(ns->add_funcs(), fd);
