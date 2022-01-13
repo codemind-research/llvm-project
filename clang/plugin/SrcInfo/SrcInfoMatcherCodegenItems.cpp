@@ -251,7 +251,7 @@ void CodegenItems::finalize() {
                          SourceMgr.getExpansionLineNumber(rd->getBraceRange().getEnd()),
                          SourceMgr.getExpansionColumnNumber(rd->getBraceRange().getEnd()));
       if (auto crd = dyn_cast<CXXRecordDecl>(rd)) {
-        for (auto base : crd->bases()) 
+        for (auto base : crd->bases())
           record_map[rd]->add_parents(setHighlanderRecord(base.getType()->getAsRecordDecl())->id());
         for (auto decl : crd->decls()) {
           if (isa<AccessSpecDecl>(decl)) {

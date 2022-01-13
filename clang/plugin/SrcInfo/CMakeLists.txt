@@ -34,6 +34,8 @@ if(LLVM_ENABLE_PLUGINS)
       ${Protobuf_LIBRARIES}
     )
   else()
-    clang_target_link_libraries(SrcInfo PRIVATE ${Protobuf_LIBRARIES})
+    clang_target_link_libraries(SrcInfo PRIVATE
+      ${Protobuf_LIBRARIES}
+    )
   endif()
 endif()

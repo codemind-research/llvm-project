@@ -14,7 +14,8 @@ namespace codemind_utils {
   /* implementation */
   string getQualifiedTypeString(QualType qt, bool showTmpl) {
     string reference = "", array = "";
-    bool isConstant = false, isVolatile = false, isRestrict = false, isPtrConst = false;
+    bool isConstant = false, isPtrConst = false;
+    // bool isRestrict = false, isVolatile = false;
     while (qt->isArrayType()) {
       array = "[";
       if (auto type = dyn_cast<ConstantArrayType>(qt->getAsArrayTypeUnsafe()))
@@ -22,16 +23,13 @@ namespace codemind_utils {
       array += "]";
       qt = qt->getAsArrayTypeUnsafe()->getElementType();
     }
-    if (qt->isAnyPointerType() && qt.isLocalConstQualified()) {
-      isPtrConst = true;
-      qt.removeLocalConst();
-    }
+    isPtrConst = qt->isAnyPointerType() && qt.isLocalConstQualified();
     while (!qt->isTypedefNameType() && (qt->isPointerType() || qt->isReferenceType())) {
       reference += (qt->isPointerType() ? "*" : (qt->isLValueReferenceType() ? "&" : "&&"));
       qt = qt->getPointeeType();
     }
-    isRestrict = qt.isRestrictQualified();
-    isVolatile = qt.isVolatileQualified();
+    // isRestrict = qt.isRestrictQualified();
+    // isVolatile = qt.isVolatileQualified();
     isConstant = qt.isLocalConstQualified();
     qt = qt.getLocalUnqualifiedType();
 
@@ -53,11 +51,11 @@ namespace codemind_utils {
       vector<string> vstr;
       name = tst->getTemplateName().getAsTemplateDecl()->getNameAsString();
       name += getTemplateArgumentsToString(tst->template_arguments());
-    } else 
+    } else
       name = qt.getAsString();
 
-    return string((isRestrict) ? "restrict " : "") +
-           string((isVolatile) ? "volatile " : "") +
+    return // string((isRestrict) ? "restrict " : "") +
+           // string((isVolatile) ? "volatile " : "") +
            string((isConstant) ? "const " : "") +
            name + reference +
            string((!array.empty()) ? " " : "") + array +
