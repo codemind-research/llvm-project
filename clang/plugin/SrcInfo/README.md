@@ -1,6 +1,20 @@
 # Linux Build
   ## Prerequisit (Ubuntu 20.04 기준)
-    * cmake, ninja-build, build-essential
+    * cmake, ninja-build, build-essential, protobuf-compiler
+    
+    1. protobuf-compiler (https://github.com/protocolbuffers/protobuf/blob/master/src/README.md 참고)
+      step 1) skip this if you are using a release .tar.gz or .zip package
+        git clone https://github.com/protocolbuffers/protobuf.git
+        cd protobuf
+        git submodule update --init --recursive
+        ./autogen.sh
+
+      step 2)
+        ./configure
+        make -j$(nproc)   # $(nproc) ensures it uses all cores for compilation
+        make check
+        sudo make install
+        sudo ldconfig     # refresh shared library cache.
 
   ## LLVM+CLANG Build
     1. git clone 및 12.x 브랜치 선택
