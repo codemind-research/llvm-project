@@ -92,6 +92,10 @@ class CGDebugInfo {
   /// represented by instantiated Metadata nodes.
   llvm::SmallDenseMap<QualType, llvm::Metadata *> SizeExprCache;
 
+  // MODIFIED: BAE@CODEMIND -------->
+  std::unique_ptr<llvm::raw_fd_ostream> annotationFile;
+  // <-------------------------------
+
   /// Callbacks to use when printing names and types.
   class PrintingCallbacks final : public clang::PrintingCallbacks {
     const CGDebugInfo &Self;
@@ -732,6 +736,11 @@ private:
       std::memcpy(Data + A.size(), B.data(), B.size());
     return StringRef(Data, A.size() + B.size());
   }
+
+  // MODIFIED: BAE@CODEMIND -------->
+  llvm::raw_fd_ostream &getAnnotationFile();
+  void annotationNamed(StringRef name, const NamedDecl *nd);
+  // <-------------------------------
 };
 
 /// A scoped helper to set the current debug location to the specified

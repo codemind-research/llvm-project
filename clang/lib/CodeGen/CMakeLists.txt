@@ -85,6 +85,9 @@ add_clang_library(clangCodeGen
   SwiftCallingConv.cpp
   TargetInfo.cpp
   VarBypassDetector.cpp
+#MODIFIED: BAE@CODEMIND -------->
+  ../../plugin/SrcInfo/CodemindUtils.cpp
+#<-------------------------------
 
   DEPENDS
   intrinsics_gen

@@ -10,6 +10,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+
+// MODIFIED: BAE@CODEMIND -------->
+#include "../../plugin/SrcInfo/CodemindUtils.h"
+// <-------------------------------
+
 #include "CGDebugInfo.h"
 #include "CGBlocks.h"
 #include "CGCXXABI.h"
@@ -1738,6 +1743,10 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
       TParamsArray.get());
 
   SPCache[Method->getCanonicalDecl()].reset(SP);
+
+  // MODIFIED: BAE@CODEMIND -------->
+  annotationNamed(MethodLinkageName, Method);
+  // <-------------------------------
 
   return SP;
 }
@@ -3553,6 +3562,22 @@ void CGDebugInfo::collectVarDeclProps(const VarDecl *VD, llvm::DIFile *&Unit,
   VDContext = getContextDescriptor(cast<Decl>(DC), Mod ? Mod : TheCU);
 }
 
+// MODIFIED: BAE@CODEMIND -------->
+llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
+  if (annotationFile.get() == nullptr) {
+    std::error_code EC;
+    annotationFile.reset(new llvm::raw_fd_ostream("linkage.map", EC));
+  }
+  return *annotationFile.get();
+}
+
+void CGDebugInfo::annotationNamed(StringRef name, const NamedDecl *nd) {
+  auto policy = nd->getASTContext().getPrintingPolicy();
+  auto annotation = codemind_utils::getAnnnotationNameString(policy, nd);
+  getAnnotationFile() << name << " " << annotation << "\n";
+}
+// <-------------------------------
+
 llvm::DISubprogram *CGDebugInfo::getFunctionFwdDeclOrStub(GlobalDecl GD,
                                                           bool Stub) {
   llvm::DINodeArray TParamsArray;
@@ -3903,6 +3928,11 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
 
   if (HasDecl)
     RegionMap[D].reset(SP);
+
+  // MODIFIED: BAE@CODEMIND -------->
+  if (auto nd = dyn_cast<NamedDecl>(D))
+    annotationNamed(LinkageName, nd);
+  // <-------------------------------
 }
 
 void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
