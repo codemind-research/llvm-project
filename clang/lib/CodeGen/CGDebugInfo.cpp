@@ -1745,7 +1745,8 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
   SPCache[Method->getCanonicalDecl()].reset(SP);
 
   // MODIFIED: BAE@CODEMIND -------->
-  annotationNamed(MethodLinkageName, Method);
+  if (Method != nullptr)
+    annotationNamed(MethodLinkageName, Method);
   // <-------------------------------
 
   return SP;
@@ -3930,7 +3931,7 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
     RegionMap[D].reset(SP);
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (auto nd = dyn_cast<NamedDecl>(D))
+  if (auto nd = dyn_cast_or_null<NamedDecl>(D))
     annotationNamed(LinkageName, nd);
   // <-------------------------------
 }
