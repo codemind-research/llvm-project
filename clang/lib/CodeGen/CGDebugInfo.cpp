@@ -1746,7 +1746,7 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
 
   // MODIFIED: BAE@CODEMIND -------->
   if (Method != nullptr)
-    annotationNamed(MethodLinkageName, Method);
+    annotationNamed(MethodName, MethodLinkageName, Method);
   // <-------------------------------
 
   return SP;
@@ -3572,10 +3572,10 @@ llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
   return *annotationFile.get();
 }
 
-void CGDebugInfo::annotationNamed(StringRef name, const NamedDecl *nd) {
+void CGDebugInfo::annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
   auto policy = nd->getASTContext().getPrintingPolicy();
   auto annotation = codemind_utils::getAnnnotationNameString(policy, nd);
-  getAnnotationFile() << name << " " << annotation << "\n";
+  getAnnotationFile() << (LinkageName.empty() ? Name : LinkageName) << " " << annotation << "\n";
 }
 // <-------------------------------
 
@@ -3932,7 +3932,7 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
 
   // MODIFIED: BAE@CODEMIND -------->
   if (auto nd = dyn_cast_or_null<NamedDecl>(D))
-    annotationNamed(LinkageName, nd);
+    annotationNamed(Name, LinkageName, nd);
   // <-------------------------------
 }
 
