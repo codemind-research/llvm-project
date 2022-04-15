@@ -3567,9 +3567,12 @@ void CGDebugInfo::collectVarDeclProps(const VarDecl *VD, llvm::DIFile *&Unit,
 llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
   if (annotationFile.get() == nullptr) {
     std::error_code EC;
-    annotationFile.reset(new llvm::raw_fd_ostream("linkage.map", EC));
+    std::string FileName = CGM.getCodeGenOpts().DebugCompilationDir + "/";
+    FileName += CGM.getCodeGenOpts().MainFileName;
+    FileName = codemind_utils::changeFileExtension(FileName, "linkage");
+    annotationFile.reset(new llvm::raw_fd_ostream(FileName, EC));
   }
-  return *annotationFile.get();
+  return *annotationFile;
 }
 
 void CGDebugInfo::annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
