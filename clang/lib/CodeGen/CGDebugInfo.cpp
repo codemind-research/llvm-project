@@ -3567,9 +3567,8 @@ void CGDebugInfo::collectVarDeclProps(const VarDecl *VD, llvm::DIFile *&Unit,
 llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
   if (annotationFile.get() == nullptr) {
     std::error_code EC;
-    std::string FileName = CGM.getCodeGenOpts().DebugCompilationDir + "/";
-    FileName += CGM.getCodeGenOpts().MainFileName;
-    FileName = codemind_utils::changeFileExtension(FileName, "linkage");
+    auto &FrontendOpts = CGM.getFrontendOpts();
+    auto FileName = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
     annotationFile.reset(new llvm::raw_fd_ostream(FileName, EC));
   }
   return *annotationFile;

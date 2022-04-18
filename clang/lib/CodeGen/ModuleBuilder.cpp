@@ -32,6 +32,9 @@ namespace {
   class CodeGeneratorImpl : public CodeGenerator {
     DiagnosticsEngine &Diags;
     ASTContext *Ctx;
+    // MODIFIED: BAE@CODEMIND -------->
+    const FrontendOptions &FrontendOpts;         // Only used for debug info.
+    // <-------------------------------
     const HeaderSearchOptions &HeaderSearchOpts; // Only used for debug info.
     const PreprocessorOptions &PreprocessorOpts; // Only used for debug info.
     const CodeGenOptions CodeGenOpts;  // Intentionally copied in.
@@ -74,11 +77,18 @@ namespace {
 
   public:
     CodeGeneratorImpl(DiagnosticsEngine &diags, llvm::StringRef ModuleName,
+                      // MODIFIED: BAE@CODEMIND -------->
+                      const FrontendOptions &FO,
+                      // <-------------------------------
                       const HeaderSearchOptions &HSO,
                       const PreprocessorOptions &PPO, const CodeGenOptions &CGO,
                       llvm::LLVMContext &C,
                       CoverageSourceInfo *CoverageInfo = nullptr)
-        : Diags(diags), Ctx(nullptr), HeaderSearchOpts(HSO),
+        : Diags(diags), Ctx(nullptr),
+          // MODIFIED: BAE@CODEMIND -------->
+          FrontendOpts(FO),
+          // <-------------------------------
+          HeaderSearchOpts(HSO),
           PreprocessorOpts(PPO), CodeGenOpts(CGO), HandlingTopLevelDecls(0),
           CoverageInfo(CoverageInfo),
           M(new llvm::Module(ExpandModuleName(ModuleName, CGO), C)) {
@@ -142,10 +152,12 @@ namespace {
       const auto &SDKVersion = Ctx->getTargetInfo().getSDKVersion();
       if (!SDKVersion.empty())
         M->setSDKVersion(SDKVersion);
-      Builder.reset(new CodeGen::CodeGenModule(Context, HeaderSearchOpts,
+      // MODIFIED: BAE@CODEMIND -------->
+      Builder.reset(new CodeGen::CodeGenModule(Context,
+                                               FrontendOpts, HeaderSearchOpts,
                                                PreprocessorOpts, CodeGenOpts,
                                                *M, Diags, CoverageInfo));
-
+      // <-------------------------------
       for (auto &&Lib : CodeGenOpts.DependentLibraries)
         Builder->AddDependentLib(Lib);
       for (auto &&Opt : CodeGenOpts.LinkerOptions)
@@ -338,9 +350,15 @@ llvm::Module *CodeGenerator::StartModule(llvm::StringRef ModuleName,
 
 CodeGenerator *clang::CreateLLVMCodeGen(
     DiagnosticsEngine &Diags, llvm::StringRef ModuleName,
+    // MODIFIED: BAE@CODEMIND -------->
+    const FrontendOptions &FrontendOpts,
+    // <-------------------------------
     const HeaderSearchOptions &HeaderSearchOpts,
     const PreprocessorOptions &PreprocessorOpts, const CodeGenOptions &CGO,
     llvm::LLVMContext &C, CoverageSourceInfo *CoverageInfo) {
-  return new CodeGeneratorImpl(Diags, ModuleName, HeaderSearchOpts,
-                               PreprocessorOpts, CGO, C, CoverageInfo);
+  // MODIFIED: BAE@CODEMIND -------->
+  return new CodeGeneratorImpl(Diags, ModuleName, FrontendOpts,
+                               HeaderSearchOpts, PreprocessorOpts,
+                               CGO, C, CoverageInfo);
+  // <-------------------------------
 }

@@ -71,6 +71,9 @@ class ValueDecl;
 class VarDecl;
 class LangOptions;
 class CodeGenOptions;
+// MODIFIED: BAE@CODEMIND -------->
+class FrontendOptions;
+// <-------------------------------
 class HeaderSearchOptions;
 class PreprocessorOptions;
 class DiagnosticsEngine;
@@ -299,6 +302,9 @@ public:
 private:
   ASTContext &Context;
   const LangOptions &LangOpts;
+  // MODIFIED: BAE@CODEMIND -------->
+  const FrontendOptions &FrontendOpts;         // Only used for debug info.
+  // <-------------------------------
   const HeaderSearchOptions &HeaderSearchOpts; // Only used for debug info.
   const PreprocessorOptions &PreprocessorOpts; // Only used for debug info.
   const CodeGenOptions &CodeGenOpts;
@@ -558,7 +564,11 @@ private:
   MetadataTypeMap GeneralizedMetadataIdMap;
 
 public:
-  CodeGenModule(ASTContext &C, const HeaderSearchOptions &headersearchopts,
+  CodeGenModule(ASTContext &C,
+                // MODIFIED: BAE@CODEMIND -------->
+                const FrontendOptions &frontendopts,
+                // <-------------------------------
+                const HeaderSearchOptions &headersearchopts,
                 const PreprocessorOptions &ppopts,
                 const CodeGenOptions &CodeGenOpts, llvm::Module &M,
                 DiagnosticsEngine &Diags,
@@ -678,6 +688,10 @@ public:
 
   ASTContext &getContext() const { return Context; }
   const LangOptions &getLangOpts() const { return LangOpts; }
+  // MODIFIED: BAE@CODEMIND -------->
+  const FrontendOptions &getFrontendOpts()
+    const { return FrontendOpts; }
+  // <-------------------------------
   const HeaderSearchOptions &getHeaderSearchOpts()
     const { return HeaderSearchOpts; }
   const PreprocessorOptions &getPreprocessorOpts()

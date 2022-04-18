@@ -28,6 +28,9 @@ namespace clang {
   class Decl;
   class DiagnosticsEngine;
   class GlobalDecl;
+  // MODIFIED: BAE@CODEMIND -------->
+  class FrontendOptions;
+  // <-------------------------------
   class HeaderSearchOptions;
   class LangOptions;
   class PreprocessorOptions;
@@ -94,6 +97,9 @@ public:
 /// the allocated CodeGenerator instance.
 CodeGenerator *CreateLLVMCodeGen(DiagnosticsEngine &Diags,
                                  llvm::StringRef ModuleName,
+                                 // MODIFIED: BAE@CODEMIND -------->
+                                 const FrontendOptions &FrontendOpts,
+                                 // <-------------------------------
                                  const HeaderSearchOptions &HeaderSearchOpts,
                                  const PreprocessorOptions &PreprocessorOpts,
                                  const CodeGenOptions &CGO,

@@ -134,6 +134,9 @@ namespace clang {
 
   public:
     BackendConsumer(BackendAction Action, DiagnosticsEngine &Diags,
+                    // MODIFIED: BAE@CODEMIND -------->
+                    const FrontendOptions &FrontendOpts,
+                    // <-------------------------------
                     const HeaderSearchOptions &HeaderSearchOpts,
                     const PreprocessorOptions &PPOpts,
                     const CodeGenOptions &CodeGenOpts,
@@ -147,8 +150,10 @@ namespace clang {
           AsmOutStream(std::move(OS)), Context(nullptr),
           LLVMIRGeneration("irgen", "LLVM IR Generation Time"),
           LLVMIRGenerationRefCount(0),
-          Gen(CreateLLVMCodeGen(Diags, InFile, HeaderSearchOpts, PPOpts,
-                                CodeGenOpts, C, CoverageInfo)),
+          // MODIFIED: BAE@CODEMIND -------->
+          Gen(CreateLLVMCodeGen(Diags, InFile, FrontendOpts, HeaderSearchOpts,
+                                PPOpts, CodeGenOpts, C, CoverageInfo)),
+          // <-------------------------------
           LinkModules(std::move(LinkModules)) {
       TimerIsEnabled = CodeGenOpts.TimePasses;
       llvm::TimePassesIsEnabled = CodeGenOpts.TimePasses;
@@ -159,6 +164,9 @@ namespace clang {
     // to use the clang diagnostic handler for IR input files. It avoids
     // initializing the OS field.
     BackendConsumer(BackendAction Action, DiagnosticsEngine &Diags,
+                    // MODIFIED: BAE@CODEMIND -------->
+                    const FrontendOptions &FrontendOpts,
+                    // <-------------------------------
                     const HeaderSearchOptions &HeaderSearchOpts,
                     const PreprocessorOptions &PPOpts,
                     const CodeGenOptions &CodeGenOpts,
@@ -171,8 +179,10 @@ namespace clang {
           Context(nullptr),
           LLVMIRGeneration("irgen", "LLVM IR Generation Time"),
           LLVMIRGenerationRefCount(0),
-          Gen(CreateLLVMCodeGen(Diags, "", HeaderSearchOpts, PPOpts,
-                                CodeGenOpts, C, CoverageInfo)),
+          // MODIFIED: BAE@CODEMIND -------->
+          Gen(CreateLLVMCodeGen(Diags, "", FrontendOpts, HeaderSearchOpts,
+                                PPOpts, CodeGenOpts, C, CoverageInfo)),
+          // <-------------------------------
           LinkModules(std::move(LinkModules)) {
       TimerIsEnabled = CodeGenOpts.TimePasses;
       llvm::TimePassesIsEnabled = CodeGenOpts.TimePasses;
@@ -966,12 +976,13 @@ CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   if (CI.getCodeGenOpts().CoverageMapping)
     CoverageInfo = CodeGen::CoverageMappingModuleGen::setUpCoverageCallbacks(
         CI.getPreprocessor());
-
+  // MODIFIED: BAE@CODEMIND -------->
   std::unique_ptr<BackendConsumer> Result(new BackendConsumer(
-      BA, CI.getDiagnostics(), CI.getHeaderSearchOpts(),
+      BA, CI.getDiagnostics(), CI.getFrontendOpts(), CI.getHeaderSearchOpts(),
       CI.getPreprocessorOpts(), CI.getCodeGenOpts(), CI.getTargetOpts(),
       CI.getLangOpts(), std::string(InFile), std::move(LinkModules),
       std::move(OS), *VMContext, CoverageInfo));
+  // <-------------------------------
   BEConsumer = Result.get();
 
   // Enable generating macro debug info only when debug info is not disabled and
@@ -1117,10 +1128,13 @@ void CodeGenAction::ExecuteAction() {
 
   // Set clang diagnostic handler. To do this we need to create a fake
   // BackendConsumer.
-  BackendConsumer Result(BA, CI.getDiagnostics(), CI.getHeaderSearchOpts(),
+  // MODIFIED: BAE@CODEMIND -------->
+  BackendConsumer Result(BA, CI.getDiagnostics(),
+                         CI.getFrontendOpts(), CI.getHeaderSearchOpts(),
                          CI.getPreprocessorOpts(), CI.getCodeGenOpts(),
                          CI.getTargetOpts(), CI.getLangOpts(),
                          std::move(LinkModules), *VMContext, nullptr);
+  // <-------------------------------
   // PR44896: Force DiscardValueNames as false. DiscardValueNames cannot be
   // true here because the valued names are needed for reading textual IR.
   Ctx.setDiscardValueNames(false);
