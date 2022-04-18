@@ -1745,8 +1745,10 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
   SPCache[Method->getCanonicalDecl()].reset(SP);
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (Method != nullptr)
+  if (!IsCtorOrDtor && Method != nullptr) {
+    // 생성자, 소멸자는 emitFunctionStart에서 생성
     annotationNamed(MethodName, MethodLinkageName, Method);
+  }
   // <-------------------------------
 
   return SP;
@@ -3933,8 +3935,10 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
     RegionMap[D].reset(SP);
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (auto nd = dyn_cast_or_null<NamedDecl>(D))
+  if (auto nd = dyn_cast_or_null<NamedDecl>(D)) {
+    // Record 생성자, 소멸자 처리도 같이 함
     annotationNamed(Name, LinkageName, nd);
+  }
   // <-------------------------------
 }
 
