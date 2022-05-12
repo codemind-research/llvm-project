@@ -10,7 +10,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-
 // MODIFIED: BAE@CODEMIND -------->
 #include "../../plugin/SrcInfo/CodemindUtils.h"
 // <-------------------------------
@@ -3570,7 +3569,7 @@ llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
   if (annotationFile.get() == nullptr) {
     std::error_code EC;
     auto &FrontendOpts = CGM.getFrontendOpts();
-    auto FileName = PLUGIN_TIMESTAMP::codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
+    auto FileName = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
     annotationFile.reset(new llvm::raw_fd_ostream(FileName, EC));
   }
   return *annotationFile;
@@ -3578,7 +3577,7 @@ llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
 
 void CGDebugInfo::annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
   auto policy = nd->getASTContext().getPrintingPolicy();
-  auto annotation = PLUGIN_TIMESTAMP::codemind_utils::getAnnnotationNameString(policy, nd);
+  auto annotation = codemind_utils::getAnnnotationNameString(policy, nd);
   getAnnotationFile() << (LinkageName.empty() ? Name : LinkageName) << " " << annotation << "\n";
 }
 // <-------------------------------

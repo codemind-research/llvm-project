@@ -1,10 +1,5 @@
 cmake_minimum_required(VERSION 3.13.4)
 
-# MODIFIED: BAE@CODEMIND -------->
-string(TIMESTAMP BUILD_TIME "codemind_%y%m%d%H%M%S")
-add_definitions(-DPLUGIN_TIMESTAMP=${BUILD_TIME})
-# <-------------------------------
-
 # If we are not building as a part of LLVM, build Clang as an
 # standalone project, using LLVM as an external library:
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
