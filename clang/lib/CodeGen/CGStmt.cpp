@@ -1127,7 +1127,7 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
   llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond());
   llvm::MDNode *Weights = createProfileOrBranchWeightsForLoop(
       S.getCond(), getProfileCount(S.getBody()), S.getBody());
-      
+
   // MODIFIED: RHO@CODEMIND -------->
   auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
   auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
@@ -1883,6 +1883,17 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
   // failure.
   llvm::BasicBlock *DefaultBlock = createBasicBlock("sw.default");
   SwitchInsn = Builder.CreateSwitch(CondV, DefaultBlock);
+  // MODIFIED: BAE@CODEMIND -------->
+  for (const SwitchCase *Case = S.getSwitchCaseList();
+       Case;
+      Case = Case->getNextSwitchCase()) {
+    if (isa<DefaultStmt>(Case)) {
+      auto SwitchMeta = SwitchInsn->getMetadata(llvm::LLVMContext::MD_dbg);
+      SwitchInsn->setMetadata("coyote.has_default", SwitchMeta);
+      break;
+    }
+  }
+  // <-------------------------------
   if (PGO.haveRegionCounts()) {
     // Walk the SwitchCase list to find how many there are.
     uint64_t DefaultCount = 0;
