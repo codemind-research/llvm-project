@@ -3576,8 +3576,7 @@ llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
 }
 
 void CGDebugInfo::annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
-  auto policy = nd->getASTContext().getPrintingPolicy();
-  auto annotation = codemind_utils::getAnnnotationNameString(policy, nd);
+  auto annotation = codemind_utils::getAnnnotationNameString(nd);
   getAnnotationFile() << (LinkageName.empty() ? Name : LinkageName) << " " << annotation << "\n";
 }
 // <-------------------------------
