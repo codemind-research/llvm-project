@@ -6871,7 +6871,10 @@ void Sema::CheckCompletedCXXClass(Scope *S, CXXRecordDecl *Record) {
   if (getLangOpts().ForceEmitVTables) {
     // If we want to emit all the vtables, we need to mark it as used.  This
     // is especially required for cases like vtable assumption loads.
-    MarkVTableUsed(Record->getInnerLocStart(), Record);
+
+    // MODIFIED: BAE@CODEMIND -------->
+    MarkVTableUsed(Record->getInnerLocStart(), Record, true);
+    // <-------------------------------
   }
 
   if (getLangOpts().CUDA) {
