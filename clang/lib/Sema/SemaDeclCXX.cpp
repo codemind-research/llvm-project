@@ -17291,6 +17291,11 @@ bool Sema::DefineUsedVTables() {
     // We may choose to emit it available_externally anyway.
     if (!DefineVTable) {
       MarkVirtualMemberExceptionSpecsNeeded(Loc, Class);
+      // MODIFIED: BAE@CODEMIND -------->
+      CXXRecordDecl *Canonical = Class->getCanonicalDecl();
+      if (VTablesUsed[Canonical])
+        Consumer.HandleVTable(Class);
+      // <-------------------------------
       continue;
     }
 
