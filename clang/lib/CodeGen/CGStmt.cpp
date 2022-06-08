@@ -681,13 +681,13 @@ void CodeGenFunction::EmitIndirectGotoStmt(const IndirectGotoStmt &S) {
 
 void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   // MODIFIED: RHO@CODEMIND -------->
-  auto getDebugSymbol = [&](const SourceRange &R) {
+  auto getLineMark = [&](const SourceRange &R) {
     auto &SourceManager = getContext().getSourceManager();
     return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
-           "-" + 
+           "-" +
            to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
   };
-  string symbol = getDebugSymbol(S.getSourceRange());
+  auto linemark = getLineMark(S.getSourceRange());
   // <-------------------------------
 
   // C99 6.8.4.1: The first substatement is executed if the expression compares
@@ -741,7 +741,7 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
     LH = Stmt::getLikelihood(S.getThen(), S.getElse());
 
   // MODIFIED: RHO@CODEMIND -------->
-  std::string trace = "coyote.if." + symbol;
+  std::string trace = "coyote.if." + linemark;
   EmitBranchOnBoolExpr(S.getCond(), ThenBlock, ElseBlock, Count, trace, LH);
   // <------------------------------- 
 
@@ -784,11 +784,11 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
     return (loc == nullptr) ? nullptr : loc->getFile();
   };
   llvm::MDNode *MD = getFileData(S.getSourceRange());
-  ThenBlock->begin()->setMetadata("coyote.then." + symbol, MD);
+  ThenBlock->begin()->setMetadata("coyote.then." + linemark, MD);
   if(!ElseBlock->empty())
-    ElseBlock->begin()->setMetadata("coyote.else." + symbol, MD);
+    ElseBlock->begin()->setMetadata("coyote.else." + linemark, MD);
   if(!ContBlock->empty())
-    ContBlock->begin()->setMetadata("coyote.ifcont." + symbol, MD);
+    ContBlock->begin()->setMetadata("coyote.ifcont." + linemark, MD);
   // <-------------------------------
 }
 
@@ -850,9 +850,16 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
         S.getCond(), getProfileCount(S.getBody()), S.getBody());
     
     // MODIFIED: RHO@CODEMIND -------->
+    auto getLineMark = [&](const SourceRange &R) {
+      auto &SourceManager = getContext().getSourceManager();
+      return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
+             "-" +
+             to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+    };
+    auto linemark = getLineMark(S.getSourceRange());
     auto inst =  Builder.CreateCondBr(BoolCondVal, LoopBody, ExitBlock, Weights);
     auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-    inst->setMetadata("coyote.loopcond", cond_meta);
+    inst->setMetadata("coyote.loopcond." + linemark, cond_meta);
     // <-------------------------------
 
     if (ExitBlock != LoopExit.getBlock()) {
@@ -951,12 +958,19 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     uint64_t BackedgeCount = getProfileCount(S.getBody()) - ParentCount;
 
     // MODIFIED: RHO@CODEMIND -------->
+    auto getLineMark = [&](const SourceRange &R) {
+      auto &SourceManager = getContext().getSourceManager();
+      return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
+             "-" +
+             to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+    };
+    auto linemark = getLineMark(S.getSourceRange());
     auto inst = Builder.CreateCondBr(
         BoolCondVal, LoopBody, LoopExit.getBlock(),
         createProfileWeightsForLoop(S.getCond(), BackedgeCount));
 
     auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-    inst->setMetadata("coyote.loopcond", cond_meta);
+    inst->setMetadata("coyote.loopcond." + linemark, cond_meta);
     // <-------------------------------    
   }
 
@@ -1042,10 +1056,17 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
       if (C->isOne())
         FnIsMustProgress = false;
 
-    // MODIFIED: RHO@CODEMIND -------->    
+    // MODIFIED: RHO@CODEMIND -------->
+    auto getLineMark = [&](const SourceRange &R) {
+      auto &SourceManager = getContext().getSourceManager();
+      return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
+             "-" +
+             to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+    };
+    auto linemark = getLineMark(S.getSourceRange());
     auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
     auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-    inst->setMetadata("coyote.loopcond", cond_meta);
+    inst->setMetadata("coyote.loopcond." + linemark, cond_meta);
     // <-------------------------------
 
     if (ExitBlock != LoopExit.getBlock()) {
@@ -1129,9 +1150,16 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
       S.getCond(), getProfileCount(S.getBody()), S.getBody());
 
   // MODIFIED: RHO@CODEMIND -------->
+  auto getLineMark = [&](const SourceRange &R) {
+    auto &SourceManager = getContext().getSourceManager();
+    return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
+           "-" +
+           to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+  };
+  auto linemark = getLineMark(S.getSourceRange());
   auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
   auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-  inst->setMetadata("coyote.loopcond", cond_meta);
+  inst->setMetadata("coyote.loopcond." + linemark, cond_meta);
   // <-------------------------------
 
   if (ExitBlock != LoopExit.getBlock()) {
