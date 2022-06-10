@@ -772,8 +772,14 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
     }
   }
 
+  // MODIFIED: RHO@CODEMIND -------->
+  // EmitBlock(ContBlock, /*IsFinished=*/true)에 의해 
+  // ContBlock 메모리가 해제되는 조건(IsFinished && BB->use_empty())
+  bool isFree = ContBlock->use_empty();
+  // <-------------------------------
+
   // Emit the continuation block for code after the if.
-  EmitBlock(ContBlock, true);
+  EmitBlock(ContBlock, /*IsFinished=*/true);
 
   // MODIFIED: RHO@CODEMIND -------->
   auto getFileData = [&](const SourceRange &R) {
@@ -784,11 +790,11 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
     return (loc == nullptr) ? nullptr : loc->getFile();
   };
   llvm::MDNode *MD = getFileData(S.getSourceRange());
-  ThenBlock->begin()->setMetadata("coyote.then." + linemark, MD);
+  ThenBlock->front().setMetadata("coyote.then." + linemark, MD);
   if(!ElseBlock->empty())
-    ElseBlock->begin()->setMetadata("coyote.else." + linemark, MD);
-  if(!ContBlock->empty())
-    ContBlock->begin()->setMetadata("coyote.ifcont." + linemark, MD);
+    ElseBlock->front().setMetadata("coyote.else." + linemark, MD);
+  if(!isFree && !ContBlock->empty())
+    ContBlock->front().setMetadata("coyote.ifcont." + linemark, MD);
   // <-------------------------------
 }
 
