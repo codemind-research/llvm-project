@@ -2823,10 +2823,13 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   if (const auto *FD = dyn_cast<FunctionDecl>(Global)) {
     // Forward declarations are emitted lazily on first use.
     if (!FD->doesThisDeclarationHaveABody()) {
+      // MODIFIED: BAE@CODEMIND -------->
+      StringRef MangledName = getMangledName(GD);
+      if (auto DI = getModuleDebugInfo())
+        DI->annotationNamed("", MangledName, FD);
       if (!FD->doesDeclarationForceExternallyVisibleDefinition())
         return;
-
-      StringRef MangledName = getMangledName(GD);
+      // <-------------------------------
 
       // Compute the function info and LLVM type.
       const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);

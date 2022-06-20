@@ -3564,23 +3564,6 @@ void CGDebugInfo::collectVarDeclProps(const VarDecl *VD, llvm::DIFile *&Unit,
   VDContext = getContextDescriptor(cast<Decl>(DC), Mod ? Mod : TheCU);
 }
 
-// MODIFIED: BAE@CODEMIND -------->
-llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
-  if (annotationFile.get() == nullptr) {
-    std::error_code EC;
-    auto &FrontendOpts = CGM.getFrontendOpts();
-    auto FileName = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
-    annotationFile.reset(new llvm::raw_fd_ostream(FileName, EC));
-  }
-  return *annotationFile;
-}
-
-void CGDebugInfo::annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
-  auto annotation = codemind_utils::getAnnnotationNameString(nd);
-  getAnnotationFile() << (LinkageName.empty() ? Name : LinkageName) << " " << annotation << "\n";
-}
-// <-------------------------------
-
 llvm::DISubprogram *CGDebugInfo::getFunctionFwdDeclOrStub(GlobalDecl GD,
                                                           bool Stub) {
   llvm::DINodeArray TParamsArray;
@@ -5089,3 +5072,23 @@ llvm::DINode::DIFlags CGDebugInfo::getCallSiteRelatedAttrs() const {
 
   return llvm::DINode::FlagAllCallsDescribed;
 }
+
+// MODIFIED: BAE@CODEMIND -------->
+llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
+  if (annotationFile.get() == nullptr) {
+    std::error_code EC;
+    auto &FrontendOpts = CGM.getFrontendOpts();
+    auto FileName = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
+    annotationFile.reset(new llvm::raw_fd_ostream(FileName, EC));
+  }
+  return *annotationFile;
+}
+
+void CGDebugInfo::annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
+  auto subject = LinkageName.empty() ? Name : LinkageName;
+  auto annotation = codemind_utils::getAnnnotationNameString(nd);
+  if (subject.empty() && isa_and_nonnull<FunctionDecl>(nd))
+    subject  = getFunctionName(dyn_cast<FunctionDecl>(nd));
+  getAnnotationFile() << subject  << " " << annotation << "\n";
+}
+// <-------------------------------

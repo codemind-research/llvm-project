@@ -738,6 +738,7 @@ private:
   }
 
   // MODIFIED: BAE@CODEMIND -------->
+public:
   llvm::raw_fd_ostream &getAnnotationFile();
   void annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
   // <-------------------------------
