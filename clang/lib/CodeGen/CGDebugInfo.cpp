@@ -5091,7 +5091,7 @@ void CGDebugInfo::addProtoVTable(StringRef tname, StringRef vtname, const VTable
   auto pInfo = getProtoFile().mutable_vtabinfos();
   auto &pVTable = (*pInfo)[tname.str()];
   auto indices = VTLayout.getAddressPointIndices();
-  int index = 0;
+  unsigned index = 0;
   pVTable.set_vtab_name(vtname.str());
   for (auto Component : VTLayout.vtable_components()) {
     if (Component.getKind() == VTableComponent::CK_OffsetToTop) {
