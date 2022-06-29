@@ -30,6 +30,11 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Support/Allocator.h"
+// MODIFIED: BAE@CODEMIND -------->
+#include "clang/AST/VTableBuilder.h"
+#include "google/protobuf/message_lite.h"
+#include "emit.pb.h"
+// <-------------------------------
 
 namespace llvm {
 class MDNode;
@@ -93,7 +98,7 @@ class CGDebugInfo {
   llvm::SmallDenseMap<QualType, llvm::Metadata *> SizeExprCache;
 
   // MODIFIED: BAE@CODEMIND -------->
-  std::unique_ptr<llvm::raw_fd_ostream> annotationFile;
+  std::unique_ptr<highlander::proto::emit::EmitOut> protoFile;
   // <-------------------------------
 
   /// Callbacks to use when printing names and types.
@@ -739,8 +744,9 @@ private:
 
   // MODIFIED: BAE@CODEMIND -------->
 public:
-  llvm::raw_fd_ostream &getAnnotationFile();
-  void annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
+  highlander::proto::emit::EmitOut &getProtoFile();
+  void addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout);
+  void addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
   // <-------------------------------
 };
 

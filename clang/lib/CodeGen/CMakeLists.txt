@@ -1,3 +1,11 @@
+find_package(Protobuf REQUIRED)
+include_directories(${Protobuf_INCLUDE_DIRS})
+
+add_compile_definitions(GOOGLE_PROTOBUF_NO_RTTI)
+add_compile_definitions(protobuf_MSVC_STATIC_RUNTIME=OFF)
+
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS emit.proto)
+
 set(LLVM_LINK_COMPONENTS
   Analysis
   BitReader
@@ -27,6 +35,7 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_clang_library(clangCodeGen
+  ${PROTO_SRCS}
   BackendUtil.cpp
   CGAtomic.cpp
   CGBlocks.cpp
@@ -99,4 +108,5 @@ add_clang_library(clangCodeGen
   clangFrontend
   clangLex
   clangSerialization
+  ${Protobuf_LIBRARIES}
   )

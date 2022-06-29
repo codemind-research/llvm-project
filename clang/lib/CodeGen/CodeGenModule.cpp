@@ -2826,7 +2826,7 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
       // MODIFIED: BAE@CODEMIND -------->
       StringRef MangledName = getMangledName(GD);
       if (auto DI = getModuleDebugInfo())
-        DI->annotationNamed("", MangledName, FD);
+        DI->addProtoFunction("", MangledName, FD);
       if (!FD->doesDeclarationForceExternallyVisibleDefinition())
         return;
       // <-------------------------------

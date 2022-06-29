@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 // MODIFIED: BAE@CODEMIND -------->
+#include <fstream>
 #include "../../plugin/SrcInfo/CodemindUtils.h"
 // <-------------------------------
 
@@ -79,6 +80,12 @@ CGDebugInfo::CGDebugInfo(CodeGenModule &CGM)
 CGDebugInfo::~CGDebugInfo() {
   assert(LexicalBlockStack.empty() &&
          "Region stack mismatch, stack not empty!");
+  if (protoFile.get() != nullptr) {
+    auto &FrontendOpts = CGM.getFrontendOpts();
+    auto fname = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
+    std::fstream output(fname, std::ios::out | std::ios::trunc | std::ios::binary);
+    protoFile->SerializeToOstream(&output);
+  }
 }
 
 ApplyDebugLocation::ApplyDebugLocation(CodeGenFunction &CGF,
@@ -1746,7 +1753,7 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
   // MODIFIED: BAE@CODEMIND -------->
   if (!IsCtorOrDtor) {
     // 생성자, 소멸자는 emitFunctionStart에서 처리
-    annotationNamed(MethodName, MethodLinkageName, Method);
+    addProtoFunction(MethodName, MethodLinkageName, Method);
   }
   // <-------------------------------
 
@@ -3921,7 +3928,7 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
     auto FI = SPCache.find(fd->getCanonicalDecl());
     bool IsCtorOrDtor = isa<CXXConstructorDecl>(fd) || isa<CXXDestructorDecl>(fd);
     if (IsCtorOrDtor || FI == SPCache.end())
-      annotationNamed(Name, LinkageName, fd);
+      addProtoFunction(Name, LinkageName, fd);
   }
   // <-------------------------------
 }
@@ -5074,21 +5081,34 @@ llvm::DINode::DIFlags CGDebugInfo::getCallSiteRelatedAttrs() const {
 }
 
 // MODIFIED: BAE@CODEMIND -------->
-llvm::raw_fd_ostream &CGDebugInfo::getAnnotationFile() {
-  if (annotationFile.get() == nullptr) {
-    std::error_code EC;
-    auto &FrontendOpts = CGM.getFrontendOpts();
-    auto FileName = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
-    annotationFile.reset(new llvm::raw_fd_ostream(FileName, EC));
-  }
-  return *annotationFile;
+highlander::proto::emit::EmitOut &CGDebugInfo::getProtoFile() {
+  if (protoFile.get() == nullptr)
+    protoFile.reset(new highlander::proto::emit::EmitOut);
+  return *protoFile;
 }
 
-void CGDebugInfo::annotationNamed(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
+void CGDebugInfo::addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout) {
+  auto pInfo = getProtoFile().mutable_vtabinfos();
+  auto &pVTable = (*pInfo)[tname.str()];
+  auto indices = VTLayout.getAddressPointIndices();
+  int index = 0;
+  pVTable.set_vtab_name(vtname.str());
+  for (auto Component : VTLayout.vtable_components()) {
+    if (Component.getKind() == VTableComponent::CK_OffsetToTop) {
+      auto pIdx = pVTable.add_idxinfos();
+      pIdx->set_idx(index < indices.size() ? indices[index] : -1);
+      pIdx->set_offset(Component.getOffsetToTop().getQuantity());
+      index++;
+    }
+  }
+}
+
+void CGDebugInfo::addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
+  auto pInfo = getProtoFile().mutable_funinfos();
   auto subject = LinkageName.empty() ? Name : LinkageName;
   auto annotation = codemind_utils::getAnnnotationNameString(nd);
   if (subject.empty() && isa_and_nonnull<FunctionDecl>(nd))
     subject  = getFunctionName(dyn_cast<FunctionDecl>(nd));
-  getAnnotationFile() << subject  << " " << annotation << "\n";
+  (*pInfo)[annotation] = subject.str();
 }
 // <-------------------------------
