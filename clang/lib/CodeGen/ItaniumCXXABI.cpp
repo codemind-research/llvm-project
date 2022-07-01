@@ -1773,11 +1773,13 @@ void ItaniumCXXABI::emitVTableDefinitions(CodeGenVTables &CGVT,
   if (VTContext.isRelativeLayout() && !VTable->isDSOLocal())
     CGVT.GenerateRelativeVTableAlias(VTable, VTable->getName());
 
+  // MODIFIED: BAE@CODEMIND -------->
   if (auto DI = CGM.getModuleDebugInfo()) {
     auto qt = RD->getTypeForDecl()->getCanonicalTypeInternal();
     auto lt = CGM.getTypes().ConvertType(qt);
     DI->addProtoVTable(lt->getStructName(), VTable->getName(), VTLayout);
   }
+  // <-------------------------------
 }
 
 bool ItaniumCXXABI::isVirtualOffsetNeededForVTableField(
