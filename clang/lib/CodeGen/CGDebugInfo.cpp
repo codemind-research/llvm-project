@@ -80,12 +80,14 @@ CGDebugInfo::CGDebugInfo(CodeGenModule &CGM)
 CGDebugInfo::~CGDebugInfo() {
   assert(LexicalBlockStack.empty() &&
          "Region stack mismatch, stack not empty!");
+  // MODIFIED: BAE@CODEMIND -------->
   if (protoFile.get() != nullptr) {
     auto &FrontendOpts = CGM.getFrontendOpts();
     auto fname = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
     std::fstream output(fname, std::ios::out | std::ios::trunc | std::ios::binary);
     protoFile->SerializeToOstream(&output);
   }
+  // <-------------------------------
 }
 
 ApplyDebugLocation::ApplyDebugLocation(CodeGenFunction &CGF,
