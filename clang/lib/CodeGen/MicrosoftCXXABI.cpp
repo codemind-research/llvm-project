@@ -1835,10 +1835,12 @@ llvm::GlobalVariable *MicrosoftCXXABI::getAddrOfVTable(const CXXRecordDecl *RD,
   if (llvm::GlobalValue *VFTable =
           CGM.getModule().getNamedGlobal(VFTableName)) {
     VFTablesMap[ID] = VFTable;
-    VTable = VTableAliasIsRequred
+    // MODIFIED: BAE@CODEMIND -------->
+    VTable = VTableAliasIsRequred && isa<llvm::GlobalAlias>(VFTable)
                  ? cast<llvm::GlobalVariable>(
                        cast<llvm::GlobalAlias>(VFTable)->getBaseObject())
                  : cast<llvm::GlobalVariable>(VFTable);
+    // <-------------------------------
     return VTable;
   }
 
