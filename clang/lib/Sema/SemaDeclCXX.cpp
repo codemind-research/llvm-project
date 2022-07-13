@@ -6873,7 +6873,18 @@ void Sema::CheckCompletedCXXClass(Scope *S, CXXRecordDecl *Record) {
     // is especially required for cases like vtable assumption loads.
 
     // MODIFIED: BAE@CODEMIND -------->
-    MarkVTableUsed(Record->getInnerLocStart(), Record, true);
+    bool DefinitionRequired = Record->hasDefinition();
+    TargetCXXABI CXXABI = Context.getTargetInfo().getCXXABI();
+    if (DefinitionRequired && CXXABI.isMicrosoft()) {
+      if (Record->hasUserDeclaredDestructor()) {
+        auto *DD = Record->getDestructor();
+        DefinitionRequired = DD == nullptr || !DD->isVirtual() ||
+                             DD->isDeleted() || DD->isDefined();
+      }
+    }
+    MarkVTableUsed(Record->getInnerLocStart(),
+                   Record,
+                   DefinitionRequired);
     // <-------------------------------
   }
 
