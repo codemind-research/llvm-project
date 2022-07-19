@@ -45,11 +45,9 @@
 #include "llvm/Support/CRC.h"
 #include "llvm/Transforms/Scalar/LowerExpectIntrinsic.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
-#include <iostream>
 
 using namespace clang;
 using namespace CodeGen;
-using namespace std;
 
 /// shouldEmitLifetimeMarkers - Decide whether we need emit the life-time
 /// markers.
@@ -1697,7 +1695,6 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                              LH == Stmt::LH_Unlikely ? Stmt::LH_None : LH);
         EmitBlock(LHSTrue);
         if(!trace.empty() && !LHSTrue->empty()) {
-          cout << ".lhstt" << endl;
           llvm::MDNode *MD = getFileData(CondBOp->getLHS()->getSourceRange());
           LHSTrue->begin()->setMetadata((trace + ".lhstt").c_str(), MD);
         }
@@ -1770,7 +1767,6 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                              LH == Stmt::LH_Likely ? Stmt::LH_None : LH);
         EmitBlock(LHSFalse);                     
         if(!trace.empty() && !LHSFalse->empty()) {
-          cout << ".lhsff" << endl;
           llvm::MDNode *MD = getFileData(CondBOp->getLHS()->getSourceRange());
           LHSFalse->begin()->setMetadata((trace + ".lhsff").c_str(), MD);
         }
@@ -1858,7 +1854,6 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                          trace.empty()?trace:trace  + ".sel3", LH);
 
     if(!trace.empty() && !RHSBlock->empty()) {
-      cout << ".rhs" << endl;
       llvm::MDNode *MD = getFileData(CondOp->getRHS()->getSourceRange());
       RHSBlock->begin()->setMetadata((trace + ".rhs").c_str(), MD);
     }                         
@@ -1908,10 +1903,13 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
   auto inst = Builder.CreateCondBr(CondV, TrueBlock, FalseBlock, Weights, Unpredictable);
   if(!trace.empty()) {
     llvm::MDNode *MD = getFileData(Cond->getSourceRange());
-    inst->setMetadata(trace.c_str(), MD);
+    // branch 분석 : br instruction
+    if (inst)
+      inst->setMetadata(trace.c_str(), MD);
 
-    auto first = Builder.GetInsertBlock()->getFirstInsertionPt();
-    first->setMetadata(trace.c_str(), MD);
+    // label 분석 : SSA에 의해 생성된 phi instruction을 제외한 label의 첫번째 instruction
+    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI())
+      first->setMetadata(trace.c_str(), MD);
   }
   // <-------------------------------  
 }

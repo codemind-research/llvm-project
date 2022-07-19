@@ -4707,6 +4707,19 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
     if (callSite->getDebugLoc())
       newCall->setDebugLoc(callSite->getDebugLoc());
 
+    // MODIFIED: BAE@CODEMIND -------->
+    {
+      // Copy MetaData without dbg
+      SmallVector<std::pair<unsigned, llvm::MDNode *>, 4> Temp;
+      unsigned int DbgID = newFn->getContext().getMDKindID("dbg");
+      callSite->getAllMetadata(Temp);
+      for (auto Meta : Temp) {
+        if (Meta.first != DbgID)
+          newCall->setMetadata(Meta.first, Meta.second);
+      }
+    }
+    // <-------------------------------
+
     callSite->eraseFromParent();
   }
 }
