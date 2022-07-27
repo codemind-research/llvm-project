@@ -284,13 +284,20 @@ llvm::DebugLoc CodeGenFunction::EmitReturnBlock(SmallVectorImpl<unsigned> &Backu
     if (B == nullptr)
       return;
     unsigned int DbgID = getLLVMContext().getMDKindID("dbg");
+    SmallVector<StringRef, 4> Names;
     SmallVector<std::pair<unsigned, llvm::MDNode *>, 4> Temp;
+    getLLVMContext().getMDKindNames(Names);
     for (auto &I : *B) {
       I.getAllMetadata(Temp);
       auto DbgNode = I.getMetadata(llvm::LLVMContext::MD_dbg);
       for (auto Meta : Temp) {
-        if (Meta.first != DbgID && Meta.second == DbgNode)
-          Backup.push_back(Meta.first);
+        if (Meta.first != DbgID) {
+          auto name = Names[Meta.first].str();
+          if (Meta.second == DbgNode)
+            Backup.push_back(Meta.first);
+          else if (name.find("coyote") != std::string::npos)
+            Backup.push_back(Meta.first);
+        }
       }
     }
   };
