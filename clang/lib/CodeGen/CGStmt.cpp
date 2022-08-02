@@ -683,9 +683,8 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   // MODIFIED: RHO@CODEMIND -------->
   auto getLineMark = [&](const SourceRange &R) {
     auto &SourceManager = getContext().getSourceManager();
-    return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
-           "-" +
-           to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
   };
   auto linemark = getLineMark(S.getSourceRange());
   // <-------------------------------

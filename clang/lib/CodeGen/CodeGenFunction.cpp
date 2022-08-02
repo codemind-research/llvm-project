@@ -1644,6 +1644,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
     return (loc == nullptr) ? nullptr : loc->getFile();
   };
+  llvm::MDNode *MD = getFileData(Cond->getSourceRange());
   // <-------------------------------
 
   Cond = Cond->IgnoreParens();
@@ -1659,7 +1660,6 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
           ConstantBool) {
         // br(1 && X) -> br(X).
         incrementProfileCounter(CondBOp);
-
         // MODIFIED: RHO@CODEMIND -------->
         return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd,
                                         TrueBlock, FalseBlock,
@@ -1701,10 +1701,8 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                              trace.empty()?trace:trace + ".and3",
                              LH == Stmt::LH_Unlikely ? Stmt::LH_None : LH);
         EmitBlock(LHSTrue);
-        if(!trace.empty() && !LHSTrue->empty()) {
-          llvm::MDNode *MD = getFileData(CondBOp->getLHS()->getSourceRange());
+        if(!trace.empty() && !LHSTrue->empty())
           LHSTrue->begin()->setMetadata((trace + ".lhstt").c_str(), MD);
-        }
         // <-------------------------------
       }
 
@@ -1773,10 +1771,8 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                              trace.empty()?trace:trace + ".or3",
                              LH == Stmt::LH_Likely ? Stmt::LH_None : LH);
         EmitBlock(LHSFalse);                     
-        if(!trace.empty() && !LHSFalse->empty()) {
-          llvm::MDNode *MD = getFileData(CondBOp->getLHS()->getSourceRange());
+        if(!trace.empty() && !LHSFalse->empty())
           LHSFalse->begin()->setMetadata((trace + ".lhsff").c_str(), MD);
-        }
         // <-------------------------------
       }
 
@@ -1860,10 +1856,8 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                          TrueCount - LHSScaledTrueCount,
                          trace.empty()?trace:trace  + ".sel3", LH);
 
-    if(!trace.empty() && !RHSBlock->empty()) {
-      llvm::MDNode *MD = getFileData(CondOp->getRHS()->getSourceRange());
+    if(!trace.empty() && !RHSBlock->empty())
       RHSBlock->begin()->setMetadata((trace + ".rhs").c_str(), MD);
-    }                         
     // <-------------------------------                         
     cond.end(*this);
 
@@ -1909,7 +1903,6 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
   // MODIFIED: RHO@CODEMIND -------->
   auto inst = Builder.CreateCondBr(CondV, TrueBlock, FalseBlock, Weights, Unpredictable);
   if(!trace.empty()) {
-    llvm::MDNode *MD = getFileData(Cond->getSourceRange());
     // branch 분석 : br instruction
     if (inst)
       inst->setMetadata(trace.c_str(), MD);
