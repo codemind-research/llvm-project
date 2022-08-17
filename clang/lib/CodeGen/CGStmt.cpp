@@ -794,6 +794,10 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
     ElseBlock->front().setMetadata("coyote.else." + linemark, MD);
   if(!isFree && !ContBlock->empty())
     ContBlock->front().setMetadata("coyote.ifcont." + linemark, MD);
+  if (auto DI = getDebugInfo())
+    DI->addDecisionTrace(S.getCond(),
+                         "coyote.then." + linemark,
+                         ElseBlock->empty() ? "" : "coyote.else." + linemark);
   // <-------------------------------
 }
 

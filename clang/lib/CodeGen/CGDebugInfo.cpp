@@ -11,7 +11,9 @@
 //===----------------------------------------------------------------------===//
 
 // MODIFIED: BAE@CODEMIND -------->
+#include "clang/Lex/Lexer.h"
 #include <fstream>
+#include <regex>
 #include "../../plugin/SrcInfo/CodemindUtils.h"
 // <-------------------------------
 
@@ -81,12 +83,7 @@ CGDebugInfo::~CGDebugInfo() {
   assert(LexicalBlockStack.empty() &&
          "Region stack mismatch, stack not empty!");
   // MODIFIED: BAE@CODEMIND -------->
-  if (protoFile.get() != nullptr) {
-    auto &FrontendOpts = CGM.getFrontendOpts();
-    auto fname = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
-    std::fstream output(fname, std::ios::out | std::ios::trunc | std::ios::binary);
-    protoFile->SerializeToOstream(&output);
-  }
+  finalizeProto();
   // <-------------------------------
 }
 
@@ -5083,10 +5080,72 @@ llvm::DINode::DIFlags CGDebugInfo::getCallSiteRelatedAttrs() const {
 }
 
 // MODIFIED: BAE@CODEMIND -------->
+void CGDebugInfo::finalizeProto() {
+  analysisCondition();
+  if (protoFile.get() != nullptr) {
+    auto &FrontendOpts = CGM.getFrontendOpts();
+    auto fname = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
+    std::fstream output(fname, std::ios::out | std::ios::trunc | std::ios::binary);
+    protoFile->SerializeToOstream(&output);
+  }
+}
+
 highlander::proto::emit::EmitOut &CGDebugInfo::getProtoFile() {
   if (protoFile.get() == nullptr)
     protoFile.reset(new highlander::proto::emit::EmitOut);
   return *protoFile;
+}
+
+size_t CGDebugInfo::getUniqueID(std::string key) {
+  static std::map<std::string, size_t> ids;
+  if (ids.find(key) == ids.end()) {
+    auto id = ids.size();
+    ids[key] = id + 1;
+  }
+  return ids[key];
+}
+
+size_t CGDebugInfo::getUniqueID(const Expr *expr, std::string trace) {
+  return trace.empty() ? 0 : getUniqueID(std::to_string((long long)expr) + trace);
+}
+
+void CGDebugInfo::analysisCondition() {
+  for (auto element : cond) {
+    auto expr = element.first;
+    auto decision = element.second;
+    auto tid = addProtoCondition(expr, std::get<0>(decision), 0, 0);
+    auto fid = addProtoCondition(expr, std::get<1>(decision), 0, 0);
+    analysisCondition(expr, tid, fid);
+  }
+}
+
+size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid) {
+  /// 1. 좌측 값에 의해 최적화가 발생하므로 우측부터 데이터 흐름을 작성
+  /// 2. 해당 조건의 trace가 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
+  /// 3. not의 경우 true id와 false id를 바꿔서 진행
+  expr = expr->IgnoreParens();
+  if (auto op = dyn_cast<BinaryOperator>(expr)) {
+    if (op->getOpcode() == BO_LAnd) {
+      auto cid = analysisCondition(op->getRHS(), tid, fid);
+      cid = cid == 0 ? tid : cid;
+      return analysisCondition(op->getLHS(), cid, fid);
+    } else if (op->getOpcode() == BO_LOr) {
+      auto cid = analysisCondition(op->getRHS(), tid, fid);
+      cid = cid == 0 ? fid : cid;
+      return analysisCondition(op->getLHS(), tid, cid);
+    }
+  } else if (auto op = dyn_cast<UnaryOperator>(expr)) {
+    tid ^= fid ^= tid ^= fid;
+    return analysisCondition(op->getSubExpr(), tid, fid);
+  } else if (auto op = dyn_cast<ConditionalOperator>(expr)) {
+    auto ctid = analysisCondition(op->getLHS(), tid, fid);
+    auto cfid = analysisCondition(op->getRHS(), tid, fid);
+    return analysisCondition(op->getCond(), ctid, cfid);
+  }
+  auto it = traces.find(expr);
+  if (it == traces.end())
+    return 0;
+  return addProtoCondition(expr, it->second, tid, fid);
 }
 
 void CGDebugInfo::addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout) {
@@ -5112,5 +5171,32 @@ void CGDebugInfo::addProtoFunction(StringRef Name, StringRef LinkageName, const 
   if (subject.empty() && isa_and_nonnull<FunctionDecl>(nd))
     subject  = getFunctionName(dyn_cast<FunctionDecl>(nd));
   (*pInfo)[annotation] = subject.str();
+}
+
+size_t CGDebugInfo::addProtoCondition(const Expr *expr, std::string trace, size_t tid, size_t fid) {
+  if (trace.empty())
+    return 0;
+  auto &ASTContext = CGM.getContext();
+  auto &SourceMgr = ASTContext.getSourceManager();
+  auto &LangOpts = ASTContext.getLangOpts();
+  auto result = getUniqueID(expr, trace);
+  auto range = CharSourceRange(expr->getSourceRange(), true);
+  auto text = Lexer::getSourceText(range, SourceMgr, LangOpts).str();
+  auto node = (*getProtoFile().mutable_condnodes())[result];
+  text = std::regex_replace(text, std::regex(R"(\\\n)"), "\\n");
+  text = std::regex_replace(text, std::regex(R"(\n)"), "");
+  node.set_trace(trace);
+  node.set_expr(text);
+  node.set_true_id(tid);
+  node.set_false_id(fid);
+  return result;
+}
+
+void CGDebugInfo::addDecisionTrace(const Expr *expr, std::string ttrace, std::string ftrace) {
+  cond[expr] = std::make_tuple(ttrace, ftrace);
+}
+
+void CGDebugInfo::addConditionTrace(const Expr *expr, std::string trace) {
+  traces[expr] = trace;
 }
 // <-------------------------------

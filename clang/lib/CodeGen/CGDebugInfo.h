@@ -34,6 +34,10 @@
 #include "clang/AST/VTableBuilder.h"
 #include "google/protobuf/message_lite.h"
 #include "emit.pb.h"
+
+#include <map>
+#include <string>
+#include <tuple>
 // <-------------------------------
 
 namespace llvm {
@@ -98,7 +102,11 @@ class CGDebugInfo {
   llvm::SmallDenseMap<QualType, llvm::Metadata *> SizeExprCache;
 
   // MODIFIED: BAE@CODEMIND -------->
+  using Decision = std::tuple<std::string, std::string>;
+
   std::unique_ptr<highlander::proto::emit::EmitOut> protoFile;
+  std::map<const Expr*, Decision> cond;
+  std::map<const Expr*, std::string> traces;
   // <-------------------------------
 
   /// Callbacks to use when printing names and types.
@@ -743,10 +751,19 @@ private:
   }
 
   // MODIFIED: BAE@CODEMIND -------->
-public:
+private:
+  void finalizeProto();
   highlander::proto::emit::EmitOut &getProtoFile();
+  size_t getUniqueID(std::string key);
+  size_t getUniqueID(const Expr *expr, std::string trace);
+  void analysisCondition();
+  size_t analysisCondition(const Expr *expr, size_t tid, size_t fid);
+public:
   void addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout);
   void addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
+  size_t addProtoCondition(const Expr *expr, std::string trace, size_t tid, size_t fid);
+  void addDecisionTrace(const Expr *expr, std::string ttrace, std::string ftrace);
+  void addConditionTrace(const Expr *expr, std::string trace);
   // <-------------------------------
 };
 

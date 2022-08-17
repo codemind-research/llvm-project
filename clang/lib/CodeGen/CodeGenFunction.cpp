@@ -1624,6 +1624,14 @@ void CodeGenFunction::EmitBranchToCounterBlock(
 
   // Go to the next block.
   EmitBranch(NextBlock);
+
+  // MODIFIED: BAE@CODEMIND -------->
+  if(!trace.empty()) {
+    // MC/DC를 위한 Condition Trace
+    if (auto DI = getDebugInfo())
+      DI->addConditionTrace(Cond, trace);
+  }
+  // <-------------------------------
 }
 
 /// EmitBranchOnBoolExpr - Emit a branch on a boolean condition (e.g. for an if
@@ -1770,7 +1778,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         EmitBranchOnBoolExpr(CondBOp->getLHS(), TrueBlock, LHSFalse, LHSCount,
                              trace.empty()?trace:trace + ".or3",
                              LH == Stmt::LH_Likely ? Stmt::LH_None : LH);
-        EmitBlock(LHSFalse);                     
+        EmitBlock(LHSFalse);
         if(!trace.empty() && !LHSFalse->empty())
           LHSFalse->begin()->setMetadata((trace + ".lhsff").c_str(), MD);
         // <-------------------------------
@@ -1910,6 +1918,10 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     // label 분석 : SSA에 의해 생성된 phi instruction을 제외한 label의 첫번째 instruction
     if (auto first = Builder.GetInsertBlock()->getFirstNonPHI())
       first->setMetadata(trace.c_str(), MD);
+
+    // MC/DC를 위한 Condition Trace
+    if (auto DI = getDebugInfo())
+      DI->addConditionTrace(Cond, trace);
   }
   // <-------------------------------  
 }
