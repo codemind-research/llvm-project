@@ -742,7 +742,7 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   // MODIFIED: RHO@CODEMIND -------->
   std::string trace = "coyote.if." + linemark;
   EmitBranchOnBoolExpr(S.getCond(), ThenBlock, ElseBlock, Count, trace, LH);
-  // <------------------------------- 
+  // <-------------------------------
 
   // Emit the 'then' code.
   EmitBlock(ThenBlock);
@@ -772,7 +772,7 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   }
 
   // MODIFIED: RHO@CODEMIND -------->
-  // EmitBlock(ContBlock, /*IsFinished=*/true)에 의해 
+  // EmitBlock(ContBlock, /*IsFinished=*/true)에 의해
   // ContBlock 메모리가 해제되는 조건(IsFinished && BB->use_empty())
   bool isFree = ContBlock->use_empty();
   // <-------------------------------
@@ -788,7 +788,7 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
       loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
     return (loc == nullptr) ? nullptr : loc->getFile();
   };
-  llvm::MDNode *MD = getFileData(S.getSourceRange());
+  auto MD = getFileData(S.getSourceRange());
   ThenBlock->front().setMetadata("coyote.then." + linemark, MD);
   if(!ElseBlock->empty())
     ElseBlock->front().setMetadata("coyote.else." + linemark, MD);
@@ -857,18 +857,24 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
       ExitBlock = createBasicBlock("while.exit");
     llvm::MDNode *Weights = createProfileOrBranchWeightsForLoop(
         S.getCond(), getProfileCount(S.getBody()), S.getBody());
-    
+
     // MODIFIED: RHO@CODEMIND -------->
+    auto getFileData = [&](const SourceRange &R) {
+      CGDebugInfo *debug = getDebugInfo();
+      llvm::DILocation *loc = nullptr;
+      if (debug != nullptr)
+        loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+      return (loc == nullptr) ? nullptr : loc->getFile();
+    };
     auto getLineMark = [&](const SourceRange &R) {
       auto &SourceManager = getContext().getSourceManager();
-      return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
-             "-" +
-             to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+      auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+      return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
     };
+    auto MD = getFileData(S.getSourceRange());
     auto linemark = getLineMark(S.getSourceRange());
     auto inst =  Builder.CreateCondBr(BoolCondVal, LoopBody, ExitBlock, Weights);
-    auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-    inst->setMetadata("coyote.loopcond." + linemark, cond_meta);
+    inst->setMetadata("coyote.loopcond." + linemark, MD);
     // <-------------------------------
 
     if (ExitBlock != LoopExit.getBlock()) {
@@ -967,20 +973,25 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     uint64_t BackedgeCount = getProfileCount(S.getBody()) - ParentCount;
 
     // MODIFIED: RHO@CODEMIND -------->
+    auto getFileData = [&](const SourceRange &R) {
+      CGDebugInfo *debug = getDebugInfo();
+      llvm::DILocation *loc = nullptr;
+      if (debug != nullptr)
+        loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+      return (loc == nullptr) ? nullptr : loc->getFile();
+    };
     auto getLineMark = [&](const SourceRange &R) {
       auto &SourceManager = getContext().getSourceManager();
-      return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
-             "-" +
-             to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+      auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+      return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
     };
+    auto MD = getFileData(S.getSourceRange());
     auto linemark = getLineMark(S.getSourceRange());
     auto inst = Builder.CreateCondBr(
         BoolCondVal, LoopBody, LoopExit.getBlock(),
         createProfileWeightsForLoop(S.getCond(), BackedgeCount));
-
-    auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-    inst->setMetadata("coyote.loopcond." + linemark, cond_meta);
-    // <-------------------------------    
+    inst->setMetadata("coyote.loopcond." + linemark, MD);
+    // <-------------------------------
   }
 
   LoopStack.pop();
@@ -1066,16 +1077,22 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
         FnIsMustProgress = false;
 
     // MODIFIED: RHO@CODEMIND -------->
+    auto getFileData = [&](const SourceRange &R) {
+      CGDebugInfo *debug = getDebugInfo();
+      llvm::DILocation *loc = nullptr;
+      if (debug != nullptr)
+        loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+      return (loc == nullptr) ? nullptr : loc->getFile();
+    };
     auto getLineMark = [&](const SourceRange &R) {
       auto &SourceManager = getContext().getSourceManager();
-      return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
-             "-" +
-             to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+      auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+      return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
     };
+    auto MD = getFileData(S.getSourceRange());
     auto linemark = getLineMark(S.getSourceRange());
     auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
-    auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-    inst->setMetadata("coyote.loopcond." + linemark, cond_meta);
+    inst->setMetadata("coyote.loopcond." + linemark, MD);
     // <-------------------------------
 
     if (ExitBlock != LoopExit.getBlock()) {
@@ -1159,16 +1176,22 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
       S.getCond(), getProfileCount(S.getBody()), S.getBody());
 
   // MODIFIED: RHO@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
   auto getLineMark = [&](const SourceRange &R) {
     auto &SourceManager = getContext().getSourceManager();
-    return to_string(SourceManager.getPresumedLineNumber(R.getBegin())) +
-           "-" +
-           to_string(SourceManager.getPresumedColumnNumber(R.getBegin()));
+    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
   };
+  auto MD = getFileData(S.getSourceRange());
   auto linemark = getLineMark(S.getSourceRange());
   auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
-  auto cond_meta = inst->getMetadata(llvm::LLVMContext::MD_dbg);
-  inst->setMetadata("coyote.loopcond." + linemark, cond_meta);
+  inst->setMetadata("coyote.loopcond." + linemark, MD);
   // <-------------------------------
 
   if (ExitBlock != LoopExit.getBlock()) {
