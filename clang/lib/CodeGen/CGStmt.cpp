@@ -803,6 +803,23 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
 
 void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
                                     ArrayRef<const Attr *> WhileAttrs) {
+  // MODIFIED: RHO@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  auto getLineMark = [&](const SourceRange &R) {
+    auto &SourceManager = getContext().getSourceManager();
+    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
+  };
+  auto MD = getFileData(S.getSourceRange());
+  auto linemark = getLineMark(S.getSourceRange());
+  // <-------------------------------
+
   // Emit the header for the loop, which will also become
   // the continue target.
   JumpDest LoopHeader = getJumpDestInCurrentScope("while.cond");
@@ -859,20 +876,6 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
         S.getCond(), getProfileCount(S.getBody()), S.getBody());
 
     // MODIFIED: RHO@CODEMIND -------->
-    auto getFileData = [&](const SourceRange &R) {
-      CGDebugInfo *debug = getDebugInfo();
-      llvm::DILocation *loc = nullptr;
-      if (debug != nullptr)
-        loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-      return (loc == nullptr) ? nullptr : loc->getFile();
-    };
-    auto getLineMark = [&](const SourceRange &R) {
-      auto &SourceManager = getContext().getSourceManager();
-      auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-      return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-    };
-    auto MD = getFileData(S.getSourceRange());
-    auto linemark = getLineMark(S.getSourceRange());
     auto inst =  Builder.CreateCondBr(BoolCondVal, LoopBody, ExitBlock, Weights);
     inst->setMetadata("coyote.loopcond." + linemark, MD);
     // <-------------------------------
@@ -922,6 +925,23 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
 
 void CodeGenFunction::EmitDoStmt(const DoStmt &S,
                                  ArrayRef<const Attr *> DoAttrs) {
+  // MODIFIED: RHO@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  auto getLineMark = [&](const SourceRange &R) {
+    auto &SourceManager = getContext().getSourceManager();
+    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
+  };
+  auto MD = getFileData(S.getSourceRange());
+  auto linemark = getLineMark(S.getSourceRange());
+  // <-------------------------------
+
   JumpDest LoopExit = getJumpDestInCurrentScope("do.end");
   JumpDest LoopCond = getJumpDestInCurrentScope("do.cond");
 
@@ -973,20 +993,6 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     uint64_t BackedgeCount = getProfileCount(S.getBody()) - ParentCount;
 
     // MODIFIED: RHO@CODEMIND -------->
-    auto getFileData = [&](const SourceRange &R) {
-      CGDebugInfo *debug = getDebugInfo();
-      llvm::DILocation *loc = nullptr;
-      if (debug != nullptr)
-        loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-      return (loc == nullptr) ? nullptr : loc->getFile();
-    };
-    auto getLineMark = [&](const SourceRange &R) {
-      auto &SourceManager = getContext().getSourceManager();
-      auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-      return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-    };
-    auto MD = getFileData(S.getSourceRange());
-    auto linemark = getLineMark(S.getSourceRange());
     auto inst = Builder.CreateCondBr(
         BoolCondVal, LoopBody, LoopExit.getBlock(),
         createProfileWeightsForLoop(S.getCond(), BackedgeCount));
@@ -1007,6 +1013,23 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
 
 void CodeGenFunction::EmitForStmt(const ForStmt &S,
                                   ArrayRef<const Attr *> ForAttrs) {
+  // MODIFIED: RHO@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  auto getLineMark = [&](const SourceRange &R) {
+    auto &SourceManager = getContext().getSourceManager();
+    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
+  };
+  auto MD = getFileData(S.getSourceRange());
+  auto linemark = getLineMark(S.getSourceRange());
+  // <-------------------------------
+
   JumpDest LoopExit = getJumpDestInCurrentScope("for.end");
 
   LexicalScope ForScope(*this, S.getSourceRange());
@@ -1077,20 +1100,6 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
         FnIsMustProgress = false;
 
     // MODIFIED: RHO@CODEMIND -------->
-    auto getFileData = [&](const SourceRange &R) {
-      CGDebugInfo *debug = getDebugInfo();
-      llvm::DILocation *loc = nullptr;
-      if (debug != nullptr)
-        loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-      return (loc == nullptr) ? nullptr : loc->getFile();
-    };
-    auto getLineMark = [&](const SourceRange &R) {
-      auto &SourceManager = getContext().getSourceManager();
-      auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-      return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-    };
-    auto MD = getFileData(S.getSourceRange());
-    auto linemark = getLineMark(S.getSourceRange());
     auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
     inst->setMetadata("coyote.loopcond." + linemark, MD);
     // <-------------------------------
@@ -1138,6 +1147,23 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
 void
 CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
                                      ArrayRef<const Attr *> ForAttrs) {
+  // MODIFIED: RHO@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  auto getLineMark = [&](const SourceRange &R) {
+    auto &SourceManager = getContext().getSourceManager();
+    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
+    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
+  };
+  auto MD = getFileData(S.getSourceRange());
+  auto linemark = getLineMark(S.getSourceRange());
+  // <-------------------------------
+
   JumpDest LoopExit = getJumpDestInCurrentScope("for.end");
 
   LexicalScope ForScope(*this, S.getSourceRange());
@@ -1176,20 +1202,6 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
       S.getCond(), getProfileCount(S.getBody()), S.getBody());
 
   // MODIFIED: RHO@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  auto getLineMark = [&](const SourceRange &R) {
-    auto &SourceManager = getContext().getSourceManager();
-    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-  };
-  auto MD = getFileData(S.getSourceRange());
-  auto linemark = getLineMark(S.getSourceRange());
   auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
   inst->setMetadata("coyote.loopcond." + linemark, MD);
   // <-------------------------------
