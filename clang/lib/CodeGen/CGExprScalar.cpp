@@ -4494,7 +4494,6 @@ static bool isCheapEnoughToEvaluateUnconditionally(const Expr *E,
   // exist in the source-level program.
 }
 
-
 Value *ScalarExprEmitter::
 VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
