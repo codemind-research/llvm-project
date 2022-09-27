@@ -222,11 +222,11 @@ class ScalarExprEmitter
   CGBuilderTy &Builder;
   bool IgnoreResultAssign;
   llvm::LLVMContext &VMContext;
+  std::string Trace;
 public:
-
-  ScalarExprEmitter(CodeGenFunction &cgf, bool ira=false)
+  ScalarExprEmitter(CodeGenFunction &cgf, bool ira=false, std::string trace = "")
     : CGF(cgf), Builder(CGF.Builder), IgnoreResultAssign(ira),
-      VMContext(cgf.getLLVMContext()) {
+      VMContext(cgf.getLLVMContext()), Trace(trace) {
   }
 
   //===--------------------------------------------------------------------===//
@@ -4182,6 +4182,16 @@ Value *ScalarExprEmitter::VisitBinAssign(const BinaryOperator *E) {
 }
 
 Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
+  // MODIFIED: BAE@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = CGF.getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  llvm::MDNode *MD = getFileData(E->getSourceRange());
+  // <-------------------------------
   // Perform vector logical and on comparisons with zero vectors.
   if (E->getType()->isVectorType()) {
     CGF.incrementProfileCounter(E);
@@ -4212,7 +4222,17 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
     if (LHSCondVal) { // If we have 1 && X, just emit X.
       CGF.incrementProfileCounter(E);
 
-      Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS());
+      // MODIFIED: BAE@CODEMIND -------->
+      auto trace = Trace.empty() ? Trace : Trace + ".and";
+      Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
+      if (!trace.empty()) {
+        if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
+          first->setMetadata(trace.c_str(), MD);
+          if (auto DI = CGF.getDebugInfo())
+            DI->addConditionTrace(E->getRHS(), trace.c_str());
+        }
+      }
+      // <-------------------------------
 
       // If we're generating for profiling or coverage, generate a branch to a
       // block that increments the RHS counter needed to track branch condition
@@ -4245,7 +4265,8 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
 
   // Branch on the LHS first.  If it is false, go to the failure (cont) block.
   CGF.EmitBranchOnBoolExpr(E->getLHS(), RHSBlock, ContBlock,
-                           CGF.getProfileCount(E->getRHS()));
+                           CGF.getProfileCount(E->getRHS()),
+                           Trace);
 
   // Any edges into the ContBlock are now from an (indeterminate number of)
   // edges from this first condition.  All of these values will be false.  Start
@@ -4259,7 +4280,17 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
   eval.begin(CGF);
   CGF.EmitBlock(RHSBlock);
   CGF.incrementProfileCounter(E);
-  Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS());
+  // MODIFIED: BAE@CODEMIND -------->
+  auto trace = Trace.empty() ? Trace : Trace + ".and";
+  Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
+  if (!trace.empty()) {
+    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
+      first->setMetadata(trace.c_str(), MD);
+      if (auto DI = CGF.getDebugInfo())
+        DI->addConditionTrace(E->getRHS(), trace.c_str());
+    }
+  }
+  // <-------------------------------
   eval.end(CGF);
 
   // Reaquire the RHS block, as there may be subblocks inserted.
@@ -4298,6 +4329,16 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
 }
 
 Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
+  // MODIFIED: BAE@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = CGF.getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  llvm::MDNode *MD = getFileData(E->getSourceRange());
+  // <-------------------------------
   // Perform vector logical or on comparisons with zero vectors.
   if (E->getType()->isVectorType()) {
     CGF.incrementProfileCounter(E);
@@ -4328,7 +4369,17 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
     if (!LHSCondVal) { // If we have 0 || X, just emit X.
       CGF.incrementProfileCounter(E);
 
-      Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS());
+      // MODIFIED: BAE@CODEMIND -------->
+      auto trace = Trace.empty() ? Trace : Trace + ".or";
+      Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
+      if (!trace.empty()) {
+        if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
+          first->setMetadata(trace.c_str(), MD);
+          if (auto DI = CGF.getDebugInfo())
+            DI->addConditionTrace(E->getRHS(), trace.c_str());
+        }
+      }
+      // <-------------------------------
 
       // If we're generating for profiling or coverage, generate a branch to a
       // block that increments the RHS counter need to track branch condition
@@ -4362,7 +4413,8 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
   // Branch on the LHS first.  If it is true, go to the success (cont) block.
   CGF.EmitBranchOnBoolExpr(E->getLHS(), ContBlock, RHSBlock,
                            CGF.getCurrentProfileCount() -
-                               CGF.getProfileCount(E->getRHS()));
+                               CGF.getProfileCount(E->getRHS()),
+                           Trace);
 
   // Any edges into the ContBlock are now from an (indeterminate number of)
   // edges from this first condition.  All of these values will be true.  Start
@@ -4377,9 +4429,17 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
 
   // Emit the RHS condition as a bool value.
   CGF.EmitBlock(RHSBlock);
-  CGF.incrementProfileCounter(E);
-  Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS());
-
+  // MODIFIED: BAE@CODEMIND -------->
+  auto trace = Trace.empty() ? Trace : Trace + ".or";
+  Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
+  if (!trace.empty()) {
+    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
+      first->setMetadata(trace.c_str(), MD);
+      if (auto DI = CGF.getDebugInfo())
+        DI->addConditionTrace(E->getRHS(), trace.c_str());
+    }
+  }
+  // <-------------------------------
   eval.end(CGF);
 
   // Reaquire the RHS block, as there may be subblocks inserted.
@@ -4437,6 +4497,16 @@ static bool isCheapEnoughToEvaluateUnconditionally(const Expr *E,
 
 Value *ScalarExprEmitter::
 VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
+  // MODIFIED: BAE@CODEMIND -------->
+  auto getFileData = [&](const SourceRange &R) {
+    CGDebugInfo *debug = CGF.getDebugInfo();
+    llvm::DILocation *loc = nullptr;
+    if (debug != nullptr)
+      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+    return (loc == nullptr) ? nullptr : loc->getFile();
+  };
+  llvm::MDNode *MD = getFileData(E->getSourceRange());
+  // <-------------------------------
   TestAndClearIgnoreResultAssign();
 
   // Bind the common expression if necessary.
@@ -4552,12 +4622,23 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
 
   CodeGenFunction::ConditionalEvaluation eval(CGF);
   CGF.EmitBranchOnBoolExpr(condExpr, LHSBlock, RHSBlock,
-                           CGF.getProfileCount(lhsExpr));
+                           CGF.getProfileCount(lhsExpr),
+                           Trace);
 
   CGF.EmitBlock(LHSBlock);
   CGF.incrementProfileCounter(E);
   eval.begin(CGF);
   Value *LHS = Visit(lhsExpr);
+  // MODIFIED: BAE@CODEMIND -------->
+  if (!Trace.empty()) {
+    auto trace = Trace.empty() ? Trace : Trace + ".lhs";
+    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
+      first->setMetadata(trace.c_str(), MD);
+      if (auto DI = CGF.getDebugInfo())
+        DI->addConditionTrace(E->getTrueExpr(), trace.c_str());
+    }
+  }
+  // <-------------------------------
   eval.end(CGF);
 
   LHSBlock = Builder.GetInsertBlock();
@@ -4566,6 +4647,15 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   CGF.EmitBlock(RHSBlock);
   eval.begin(CGF);
   Value *RHS = Visit(rhsExpr);
+  // MODIFIED: BAE@CODEMIND -------->
+  if (!Trace.empty()) {
+    auto trace = Trace.empty() ? Trace : Trace + ".rhs";
+    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI())
+      first->setMetadata(trace.c_str(), MD);
+    if (auto DI = CGF.getDebugInfo())
+      DI->addConditionTrace(E->getFalseExpr(), trace.c_str());
+  }
+  // <-------------------------------
   eval.end(CGF);
 
   RHSBlock = Builder.GetInsertBlock();
@@ -4735,12 +4825,14 @@ Value *ScalarExprEmitter::VisitAtomicExpr(AtomicExpr *E) {
 
 /// Emit the computation of the specified expression of scalar type, ignoring
 /// the result.
-Value *CodeGenFunction::EmitScalarExpr(const Expr *E, bool IgnoreResultAssign) {
+Value *CodeGenFunction::EmitScalarExpr(const Expr *E, bool IgnoreResultAssign,
+                                       std::string trace) {
   assert(E && hasScalarEvaluationKind(E->getType()) &&
          "Invalid scalar expression to emit");
-
-  return ScalarExprEmitter(*this, IgnoreResultAssign)
+  // MODIFIED: BAE@CODEMIND -------->
+  return ScalarExprEmitter(*this, IgnoreResultAssign, trace)
       .Visit(const_cast<Expr *>(E));
+  // <-------------------------------
 }
 
 /// Emit a conversion from the specified type to the specified destination type,

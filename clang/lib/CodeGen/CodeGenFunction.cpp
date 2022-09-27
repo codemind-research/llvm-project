@@ -1624,14 +1624,6 @@ void CodeGenFunction::EmitBranchToCounterBlock(
 
   // Go to the next block.
   EmitBranch(NextBlock);
-
-  // MODIFIED: BAE@CODEMIND -------->
-  if(!trace.empty()) {
-    // MC/DC를 위한 Condition Trace
-    if (auto DI = getDebugInfo())
-      DI->addConditionTrace(Cond, trace);
-  }
-  // <-------------------------------
 }
 
 /// EmitBranchOnBoolExpr - Emit a branch on a boolean condition (e.g. for an if
@@ -1709,8 +1701,6 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                              trace.empty()?trace:trace + ".and3",
                              LH == Stmt::LH_Unlikely ? Stmt::LH_None : LH);
         EmitBlock(LHSTrue);
-        if(!trace.empty() && !LHSTrue->empty())
-          LHSTrue->begin()->setMetadata((trace + ".lhstt").c_str(), MD);
         // <-------------------------------
       }
 
@@ -1779,8 +1769,6 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                              trace.empty()?trace:trace + ".or3",
                              LH == Stmt::LH_Likely ? Stmt::LH_None : LH);
         EmitBlock(LHSFalse);
-        if(!trace.empty() && !LHSFalse->empty())
-          LHSFalse->begin()->setMetadata((trace + ".lhsff").c_str(), MD);
         // <-------------------------------
       }
 
@@ -1863,9 +1851,6 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     EmitBranchOnBoolExpr(CondOp->getRHS(), TrueBlock, FalseBlock,
                          TrueCount - LHSScaledTrueCount,
                          trace.empty()?trace:trace  + ".sel3", LH);
-
-    if(!trace.empty() && !RHSBlock->empty())
-      RHSBlock->begin()->setMetadata((trace + ".rhs").c_str(), MD);
     // <-------------------------------                         
     cond.end(*this);
 
@@ -1916,12 +1901,12 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       inst->setMetadata(trace.c_str(), MD);
 
     // label 분석 : SSA에 의해 생성된 phi instruction을 제외한 label의 첫번째 instruction
-    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI())
+    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
       first->setMetadata(trace.c_str(), MD);
-
-    // MC/DC를 위한 Condition Trace
-    if (auto DI = getDebugInfo())
-      DI->addConditionTrace(Cond, trace);
+      // MC/DC를 위한 Condition Trace
+      if (auto DI = getDebugInfo())
+        DI->addConditionTrace(Cond, trace);
+    }
   }
   // <-------------------------------  
 }

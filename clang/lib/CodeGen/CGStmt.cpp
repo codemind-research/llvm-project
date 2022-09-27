@@ -803,7 +803,7 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
 
 void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
                                     ArrayRef<const Attr *> WhileAttrs) {
-  // MODIFIED: RHO@CODEMIND -------->
+  // MODIFIED: BAE@CODEMIND -------->
   auto getFileData = [&](const SourceRange &R) {
     CGDebugInfo *debug = getDebugInfo();
     llvm::DILocation *loc = nullptr;
@@ -847,7 +847,9 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   // Evaluate the conditional in the while header.  C99 6.8.5.1: The
   // evaluation of the controlling expression takes place before each
   // execution of the loop body.
-  llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond());
+  // MODIFIED: BAE@CODEMIND -------->
+  llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond(), "coyote.loop." + linemark);
+  // <-------------------------------
 
   // while(1) is common, avoid extra exit blocks.  Be sure
   // to correctly handle break/continue though.
@@ -921,6 +923,17 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   // a branch, try to erase it.
   if (!EmitBoolCondBranch)
     SimplifyForwardingBlocks(LoopHeader.getBlock());
+
+  // MODIFIED: BAE@CODEMIND -------->
+  if (auto first = LoopHeader.getBlock()->getFirstNonPHI())
+    first->setMetadata("coyote.loop." + linemark, MD);
+  if (auto first = LoopBody->getFirstNonPHI())
+    first->setMetadata("coyote.loopbody." + linemark, MD);
+  if (auto DI = getDebugInfo()) {
+    DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+    DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+  }
+  // <-------------------------------
 }
 
 void CodeGenFunction::EmitDoStmt(const DoStmt &S,
@@ -967,7 +980,7 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
   // Evaluate the conditional in the while header.
   // C99 6.8.5p2/p4: The first substatement is executed if the expression
   // compares unequal to 0.  The condition must be a scalar type.
-  llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond());
+  llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond(), "coyote.loop." + linemark);
 
   BreakContinueStack.pop_back();
 
@@ -1009,6 +1022,17 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
   // emitting a branch, try to erase it.
   if (!EmitBoolCondBranch)
     SimplifyForwardingBlocks(LoopCond.getBlock());
+
+  // MODIFIED: BAE@CODEMIND -------->
+  if (auto first = LoopCond.getBlock()->getFirstNonPHI())
+    first->setMetadata("coyote.loop." + linemark, MD);
+  if (auto first = LoopBody->getFirstNonPHI())
+    first->setMetadata("coyote.loopbody." + linemark, MD);
+  if (auto DI = getDebugInfo()) {
+    DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+    DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+  }
+  // <-------------------------------
 }
 
 void CodeGenFunction::EmitForStmt(const ForStmt &S,
@@ -1043,6 +1067,9 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
   // later.
   JumpDest Continue = getJumpDestInCurrentScope("for.cond");
   llvm::BasicBlock *CondBlock = Continue.getBlock();
+  // MODIFIED: BAE@CODEMIND -------->
+  llvm::BasicBlock *ForBody = nullptr;
+  // <-------------------------------
   EmitBlock(CondBlock);
 
   bool LoopMustProgress = false;
@@ -1087,11 +1114,13 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
       ExitBlock = createBasicBlock("for.cond.cleanup");
 
     // As long as the condition is true, iterate the loop.
-    llvm::BasicBlock *ForBody = createBasicBlock("for.body");
+    // MODIFIED: BAE@CODEMIND -------->
+    ForBody = createBasicBlock("for.body");
+    // <-------------------------------
 
     // C99 6.8.5p2/p4: The first substatement is executed if the expression
     // compares unequal to 0.  The condition must be a scalar type.
-    llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond());
+    llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond(), "coyote.loop." + linemark);
     llvm::MDNode *Weights = createProfileOrBranchWeightsForLoop(
         S.getCond(), getProfileCount(S.getBody()), S.getBody());
 
@@ -1142,6 +1171,19 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
 
   // Emit the fall-through block.
   EmitBlock(LoopExit.getBlock(), true);
+
+  // MODIFIED: BAE@CODEMIND -------->
+  if (S.getCond() != nullptr) {
+    if (auto first = CondBlock->getFirstNonPHI())
+      first->setMetadata("coyote.loop." + linemark, MD);
+    if (auto first = ForBody != nullptr ? ForBody->getFirstNonPHI() : nullptr)
+      first->setMetadata("coyote.loopbody." + linemark, MD);
+    if (auto DI = getDebugInfo()) {
+      DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+      DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+    }
+  }
+  // <-------------------------------
 }
 
 void
@@ -1197,7 +1239,7 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
 
   // The body is executed if the expression, contextually converted
   // to bool, is true.
-  llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond());
+  llvm::Value *BoolCondVal = EvaluateExprAsBool(S.getCond(), "coyote.loop." + linemark);
   llvm::MDNode *Weights = createProfileOrBranchWeightsForLoop(
       S.getCond(), getProfileCount(S.getBody()), S.getBody());
 
@@ -1242,6 +1284,17 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
 
   // Emit the fall-through block.
   EmitBlock(LoopExit.getBlock(), true);
+
+  // MODIFIED: BAE@CODEMIND -------->
+  if (auto first = CondBlock->getFirstNonPHI())
+    first->setMetadata("coyote.loop." + linemark, MD);
+  if (auto first = ForBody->getFirstNonPHI())
+    first->setMetadata("coyote.loopbody." + linemark, MD);
+  if (auto DI = getDebugInfo()) {
+    DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+    DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+  }
+  // <-------------------------------
 }
 
 void CodeGenFunction::EmitReturnOfRValue(RValue RV, QualType Ty) {

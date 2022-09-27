@@ -5113,9 +5113,12 @@ void CGDebugInfo::analysisCondition() {
   for (auto element : cond) {
     auto expr = element.first;
     auto decision = element.second;
-    auto tid = addProtoCondition(expr, std::get<0>(decision), 0, 0);
-    auto fid = addProtoCondition(expr, std::get<1>(decision), 0, 0);
-    analysisCondition(expr, tid, fid);
+    auto tid = getUniqueID(expr, std::get<0>(decision));
+    auto fid = getUniqueID(expr, std::get<1>(decision));
+    if (analysisCondition(expr, tid, fid) != 0) {
+      addProtoCondition(expr, std::get<0>(decision), 0, 0);
+      addProtoCondition(expr, std::get<1>(decision), 0, 0);
+    }
   }
 }
 
@@ -5126,13 +5129,31 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid) 
   expr = expr->IgnoreParens();
   if (auto op = dyn_cast<BinaryOperator>(expr)) {
     if (op->getOpcode() == BO_LAnd) {
-      auto cid = analysisCondition(op->getRHS(), tid, fid);
-      cid = cid == 0 ? tid : cid;
-      return analysisCondition(op->getLHS(), cid, fid);
+      Expr::EvalResult er;
+      if (!op->getLHS()->EvaluateAsInt(er, CGM.getContext())) {
+        if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
+          tid = analysisCondition(op->getRHS(), tid, fid);
+        else if (!er.Val.getInt().getBoolValue())
+          return 0;
+        return analysisCondition(op->getLHS(), tid, fid);
+      } else if (er.Val.getInt().getBoolValue()) {
+        if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
+          return analysisCondition(op->getRHS(), tid, fid);
+      }
+      return 0;
     } else if (op->getOpcode() == BO_LOr) {
-      auto cid = analysisCondition(op->getRHS(), tid, fid);
-      cid = cid == 0 ? fid : cid;
-      return analysisCondition(op->getLHS(), tid, cid);
+      Expr::EvalResult er;
+      if (!op->getLHS()->EvaluateAsInt(er, CGM.getContext())) {
+        if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
+          fid = analysisCondition(op->getRHS(), tid, fid);
+        else if (er.Val.getInt().getBoolValue())
+          return 0;
+        return analysisCondition(op->getLHS(), tid, fid);
+      } else if (!er.Val.getInt().getBoolValue()) {
+        if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
+          return analysisCondition(op->getRHS(), tid, fid);
+      }
+      return 0;
     }
   } else if (auto op = dyn_cast<UnaryOperator>(expr)) {
     tid ^= fid ^= tid ^= fid;
@@ -5193,10 +5214,12 @@ size_t CGDebugInfo::addProtoCondition(const Expr *expr, std::string trace, size_
 }
 
 void CGDebugInfo::addDecisionTrace(const Expr *expr, std::string ttrace, std::string ftrace) {
-  cond[expr] = std::make_tuple(ttrace, ftrace);
+  if (expr != nullptr)
+    cond[expr] = std::make_tuple(ttrace, ftrace);
 }
 
 void CGDebugInfo::addConditionTrace(const Expr *expr, std::string trace) {
-  traces[expr] = trace;
+  if (expr != nullptr)
+    traces[expr] = trace;
 }
 // <-------------------------------

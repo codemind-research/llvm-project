@@ -2541,7 +2541,7 @@ public:
 
   /// EvaluateExprAsBool - Perform the usual unary conversions on the specified
   /// expression and compare the result against zero, returning an Int1Ty value.
-  llvm::Value *EvaluateExprAsBool(const Expr *E);
+  llvm::Value *EvaluateExprAsBool(const Expr *E, std::string trace = "");
 
   /// EmitIgnoredExpr - Emit an expression in a context which ignores the result.
   void EmitIgnoredExpr(const Expr *E);
@@ -4240,7 +4240,8 @@ public:
 
   /// EmitScalarExpr - Emit the computation of the specified expression of LLVM
   /// scalar type, returning the result.
-  llvm::Value *EmitScalarExpr(const Expr *E , bool IgnoreResultAssign = false);
+  llvm::Value *EmitScalarExpr(const Expr *E , bool IgnoreResultAssign = false,
+                              std::string trace = "");
 
   /// Emit a conversion from the specified type to the specified destination
   /// type, both of which are LLVM scalar types.
