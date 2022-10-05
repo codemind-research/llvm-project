@@ -106,7 +106,7 @@ class CGDebugInfo {
 
   std::unique_ptr<highlander::proto::emit::EmitOut> protoFile;
   std::map<const Expr*, Decision> cond;
-  std::map<const Expr*, std::string> traces;
+  std::map<const Expr*, std::string> syms;
   // <-------------------------------
 
   /// Callbacks to use when printing names and types.
@@ -755,15 +755,16 @@ private:
   void finalizeProto();
   highlander::proto::emit::EmitOut &getProtoFile();
   size_t getUniqueID(std::string key);
-  size_t getUniqueID(const Expr *expr, std::string trace);
+  size_t getUniqueID(const Expr *expr, std::string sym_name);
   void analysisCondition();
   size_t analysisCondition(const Expr *expr, size_t tid, size_t fid);
 public:
   void addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout);
   void addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
-  size_t addProtoCondition(const Expr *expr, std::string trace, size_t tid, size_t fid);
-  void addDecisionTrace(const Expr *expr, std::string ttrace, std::string ftrace);
-  void addConditionTrace(const Expr *expr, std::string trace);
+  size_t addProtoFile(SourceLocation loc);
+  size_t addProtoCondition(const Expr *expr, std::string sym_name, size_t tid, size_t fid);
+  void addDecisionTrace(const Expr *expr, std::string tsym_name, std::string fsym_name);
+  void addConditionTrace(const Expr *expr, std::string sym_name);
   // <-------------------------------
 };
 

@@ -5105,8 +5105,8 @@ size_t CGDebugInfo::getUniqueID(std::string key) {
   return ids[key];
 }
 
-size_t CGDebugInfo::getUniqueID(const Expr *expr, std::string trace) {
-  return trace.empty() ? 0 : getUniqueID(std::to_string((long long)expr) + trace);
+size_t CGDebugInfo::getUniqueID(const Expr *expr, std::string sym_name) {
+  return sym_name.empty() ? 0 : getUniqueID(std::to_string((long long)expr) + sym_name);
 }
 
 void CGDebugInfo::analysisCondition() {
@@ -5124,7 +5124,7 @@ void CGDebugInfo::analysisCondition() {
 
 size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid) {
   /// 1. 좌측 값에 의해 최적화가 발생하므로 우측부터 데이터 흐름을 작성
-  /// 2. 해당 조건의 trace가 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
+  /// 2. 해당 조건의 sym_name 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
   /// 3. not의 경우 true id와 false id를 바꿔서 진행
   expr = expr->IgnoreParens();
   if (auto op = dyn_cast<BinaryOperator>(expr)) {
@@ -5165,8 +5165,8 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid) 
     auto cfid = analysisCondition(op->getRHS(), tid, fid);
     return analysisCondition(op->getCond(), ctid, cfid);
   }
-  auto it = traces.find(expr);
-  if (it == traces.end())
+  auto it = syms.find(expr);
+  if (it == syms.end())
     return 0;
   return addProtoCondition(expr, it->second, tid, fid);
 }
@@ -5196,32 +5196,49 @@ void CGDebugInfo::addProtoFunction(StringRef Name, StringRef LinkageName, const 
   (*pInfo)[annotation] = subject.str();
 }
 
-size_t CGDebugInfo::addProtoCondition(const Expr *expr, std::string trace, size_t tid, size_t fid) {
-  if (trace.empty())
+size_t CGDebugInfo::addProtoFile(SourceLocation loc) {
+  auto &ASTContext = CGM.getContext();
+  auto &SourceMgr = ASTContext.getSourceManager();
+  auto ploc = SourceMgr.getPresumedLoc(loc);
+  auto fname = ploc.getFilename();
+  auto files = getProtoFile().mutable_files();
+  size_t result = 0;
+  while (result < files->size()) {
+    if ((*files)[result] == fname)
+      return result;
+    result++;
+  }
+  (*files)[result] = fname;
+  return result;
+}
+
+size_t CGDebugInfo::addProtoCondition(const Expr *expr, std::string sym_name, size_t tid, size_t fid) {
+  if (sym_name.empty())
     return 0;
   auto &ASTContext = CGM.getContext();
   auto &SourceMgr = ASTContext.getSourceManager();
   auto &LangOpts = ASTContext.getLangOpts();
-  auto result = getUniqueID(expr, trace);
+  auto result = getUniqueID(expr, sym_name);
   auto range = CharSourceRange(expr->getSourceRange(), true);
   auto text = Lexer::getSourceText(range, SourceMgr, LangOpts).str();
-  auto node = (*getProtoFile().mutable_condnodes())[result];
+  auto &node = (*getProtoFile().mutable_condnodes())[result];
   text = std::regex_replace(text, std::regex(R"(\\\n)"), "\\n");
   text = std::regex_replace(text, std::regex(R"(\n)"), "");
-  node.set_trace(trace);
+  node.set_fid(addProtoFile(expr->getBeginLoc()));
+  node.set_sym_name(sym_name);
   node.set_expr(text);
   node.set_true_id(tid);
   node.set_false_id(fid);
   return result;
 }
 
-void CGDebugInfo::addDecisionTrace(const Expr *expr, std::string ttrace, std::string ftrace) {
+void CGDebugInfo::addDecisionTrace(const Expr *expr, std::string ttsym_name, std::string ftsym_name) {
   if (expr != nullptr)
-    cond[expr] = std::make_tuple(ttrace, ftrace);
+    cond[expr] = std::make_tuple(ttsym_name, ftsym_name);
 }
 
-void CGDebugInfo::addConditionTrace(const Expr *expr, std::string trace) {
+void CGDebugInfo::addConditionTrace(const Expr *expr, std::string sym_name) {
   if (expr != nullptr)
-    traces[expr] = trace;
+    syms[expr] = sym_name;
 }
 // <-------------------------------
