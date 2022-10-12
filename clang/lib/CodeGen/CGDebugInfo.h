@@ -757,12 +757,13 @@ private:
   size_t getUniqueID(std::string key);
   size_t getUniqueID(const Expr *expr, std::string sym_name);
   void analysisCondition();
-  size_t analysisCondition(const Expr *expr, size_t tid, size_t fid);
+  size_t analysisCondition(const Expr *expr, size_t tid, size_t fid, size_t &rid);
 public:
   void addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout);
   void addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
   size_t addProtoFile(SourceLocation loc);
-  size_t addProtoCondition(const Expr *expr, std::string sym_name, size_t tid, size_t fid);
+  size_t addProtoCondNode(const Expr *expr, std::string sym_name, size_t tid, size_t fid);
+  void addProtoCondInfo(size_t file, size_t rid, size_t tid, size_t fid);
   void addDecisionTrace(const Expr *expr, std::string tsym_name, std::string fsym_name);
   void addConditionTrace(const Expr *expr, std::string sym_name);
   // <-------------------------------

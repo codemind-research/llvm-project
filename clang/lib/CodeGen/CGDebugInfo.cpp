@@ -5111,18 +5111,20 @@ size_t CGDebugInfo::getUniqueID(const Expr *expr, std::string sym_name) {
 
 void CGDebugInfo::analysisCondition() {
   for (auto element : cond) {
+    size_t rid = 0;
     auto expr = element.first;
     auto decision = element.second;
     auto tid = getUniqueID(expr, std::get<0>(decision));
     auto fid = getUniqueID(expr, std::get<1>(decision));
-    if (analysisCondition(expr, tid, fid) != 0) {
-      addProtoCondition(expr, std::get<0>(decision), 0, 0);
-      addProtoCondition(expr, std::get<1>(decision), 0, 0);
+    if (analysisCondition(expr, tid, fid, rid) != 0) {
+      addProtoCondNode(expr, std::get<0>(decision), 0, 0);
+      addProtoCondNode(expr, std::get<1>(decision), 0, 0);
+      addProtoCondInfo(addProtoFile(expr->getBeginLoc()), rid, tid, fid);
     }
   }
 }
 
-size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid) {
+size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, size_t &rid) {
   /// 1. 좌측 값에 의해 최적화가 발생하므로 우측부터 데이터 흐름을 작성
   /// 2. 해당 조건의 sym_name 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
   /// 3. not의 경우 true id와 false id를 바꿔서 진행
@@ -5132,43 +5134,46 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid) 
       Expr::EvalResult er;
       if (!op->getLHS()->EvaluateAsInt(er, CGM.getContext())) {
         if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
-          tid = analysisCondition(op->getRHS(), tid, fid);
+          tid = analysisCondition(op->getRHS(), tid, fid, rid);
         else if (!er.Val.getInt().getBoolValue())
           return 0;
-        return analysisCondition(op->getLHS(), tid, fid);
+        return analysisCondition(op->getLHS(), tid, fid, rid);
       } else if (er.Val.getInt().getBoolValue()) {
         if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
-          return analysisCondition(op->getRHS(), tid, fid);
+          return analysisCondition(op->getRHS(), tid, fid, rid);
       }
       return 0;
     } else if (op->getOpcode() == BO_LOr) {
       Expr::EvalResult er;
       if (!op->getLHS()->EvaluateAsInt(er, CGM.getContext())) {
         if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
-          fid = analysisCondition(op->getRHS(), tid, fid);
+          fid = analysisCondition(op->getRHS(), tid, fid, rid);
         else if (er.Val.getInt().getBoolValue())
           return 0;
-        return analysisCondition(op->getLHS(), tid, fid);
+        return analysisCondition(op->getLHS(), tid, fid, rid);
       } else if (!er.Val.getInt().getBoolValue()) {
         if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
-          return analysisCondition(op->getRHS(), tid, fid);
+          return analysisCondition(op->getRHS(), tid, fid, rid);
       }
       return 0;
     }
   } else if (auto op = dyn_cast<UnaryOperator>(expr)) {
     if (op->getOpcode() == clang::UnaryOperatorKind::UO_LNot) {
       tid ^= fid ^= tid ^= fid;
-      return analysisCondition(op->getSubExpr(), tid, fid);
+      return analysisCondition(op->getSubExpr(), tid, fid, rid);
     }
   } else if (auto op = dyn_cast<ConditionalOperator>(expr)) {
-    auto ctid = analysisCondition(op->getLHS(), tid, fid);
-    auto cfid = analysisCondition(op->getRHS(), tid, fid);
-    return analysisCondition(op->getCond(), ctid, cfid);
+    auto ctid = analysisCondition(op->getLHS(), tid, fid, rid);
+    auto cfid = analysisCondition(op->getRHS(), tid, fid, rid);
+    return analysisCondition(op->getCond(), ctid, cfid, rid);
   }
+  size_t result = 0;
   auto it = syms.find(expr);
-  if (it == syms.end())
-    return 0;
-  return addProtoCondition(expr, it->second, tid, fid);
+  if (it != syms.end()) {
+    result = addProtoCondNode(expr, it->second, tid, fid);
+    rid = rid == 0 ? result : rid;
+  }
+  return result;
 }
 
 void CGDebugInfo::addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout) {
@@ -5212,7 +5217,8 @@ size_t CGDebugInfo::addProtoFile(SourceLocation loc) {
   return result;
 }
 
-size_t CGDebugInfo::addProtoCondition(const Expr *expr, std::string sym_name, size_t tid, size_t fid) {
+size_t CGDebugInfo::addProtoCondNode(const Expr *expr, std::string sym_name, size_t tid, size_t fid) {
+  using namespace highlander::proto::emit;
   if (sym_name.empty())
     return 0;
   auto &ASTContext = CGM.getContext();
@@ -5224,12 +5230,19 @@ size_t CGDebugInfo::addProtoCondition(const Expr *expr, std::string sym_name, si
   auto &node = (*getProtoFile().mutable_condnodes())[result];
   text = std::regex_replace(text, std::regex(R"(\\\n)"), "\\n");
   text = std::regex_replace(text, std::regex(R"(\n)"), "");
-  node.set_fid(addProtoFile(expr->getBeginLoc()));
   node.set_sym_name(sym_name);
   node.set_expr(text);
   node.set_true_id(tid);
   node.set_false_id(fid);
   return result;
+}
+
+void CGDebugInfo::addProtoCondInfo(size_t file, size_t rid, size_t tid, size_t fid) {
+  auto info = getProtoFile().add_condinfos();
+  info->set_file_id(file);
+  info->set_root_id(rid);
+  info->set_true_id(tid);
+  info->set_false_id(fid);
 }
 
 void CGDebugInfo::addDecisionTrace(const Expr *expr, std::string ttsym_name, std::string ftsym_name) {
