@@ -5128,13 +5128,14 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, 
   /// 1. 좌측 값에 의해 최적화가 발생하므로 우측부터 데이터 흐름을 작성
   /// 2. 해당 조건의 sym_name 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
   /// 3. not의 경우 true id와 false id를 바꿔서 진행
+  size_t dummy, result = 0;
   expr = expr->IgnoreParens();
   if (auto op = dyn_cast<BinaryOperator>(expr)) {
     if (op->getOpcode() == BO_LAnd) {
       Expr::EvalResult er;
       if (!op->getLHS()->EvaluateAsInt(er, CGM.getContext())) {
         if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
-          tid = analysisCondition(op->getRHS(), tid, fid, rid);
+          tid = analysisCondition(op->getRHS(), tid, fid, dummy);
         else if (!er.Val.getInt().getBoolValue())
           return 0;
         return analysisCondition(op->getLHS(), tid, fid, rid);
@@ -5147,7 +5148,7 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, 
       Expr::EvalResult er;
       if (!op->getLHS()->EvaluateAsInt(er, CGM.getContext())) {
         if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
-          fid = analysisCondition(op->getRHS(), tid, fid, rid);
+          fid = analysisCondition(op->getRHS(), tid, fid, dummy);
         else if (er.Val.getInt().getBoolValue())
           return 0;
         return analysisCondition(op->getLHS(), tid, fid, rid);
@@ -5163,11 +5164,10 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, 
       return analysisCondition(op->getSubExpr(), tid, fid, rid);
     }
   } else if (auto op = dyn_cast<ConditionalOperator>(expr)) {
-    auto ctid = analysisCondition(op->getLHS(), tid, fid, rid);
-    auto cfid = analysisCondition(op->getRHS(), tid, fid, rid);
+    auto ctid = analysisCondition(op->getLHS(), tid, fid, dummy);
+    auto cfid = analysisCondition(op->getRHS(), tid, fid, dummy);
     return analysisCondition(op->getCond(), ctid, cfid, rid);
   }
-  size_t result = 0;
   auto it = syms.find(expr);
   if (it != syms.end()) {
     result = addProtoCondNode(expr, it->second, tid, fid);
