@@ -5202,10 +5202,17 @@ void CGDebugInfo::addProtoFunction(StringRef Name, StringRef LinkageName, const 
 }
 
 size_t CGDebugInfo::addProtoFile(SourceLocation loc) {
+  auto getAbsolute = [](std::string path) {
+    SmallString<128> str;
+    str.append(path);
+    if (llvm::sys::fs::make_absolute(str).value() == 0)
+      path = str.c_str();
+    return path;
+  };
   auto &ASTContext = CGM.getContext();
   auto &SourceMgr = ASTContext.getSourceManager();
   auto ploc = SourceMgr.getPresumedLoc(loc);
-  auto fname = ploc.getFilename();
+  auto fname = getAbsolute(ploc.getFilename());
   auto files = getProtoFile().mutable_files();
   size_t result = 0;
   while (result < files->size()) {
@@ -5225,6 +5232,7 @@ size_t CGDebugInfo::addProtoCondNode(const Expr *expr, std::string sym_name, siz
   auto &SourceMgr = ASTContext.getSourceManager();
   auto &LangOpts = ASTContext.getLangOpts();
   auto result = getUniqueID(expr, sym_name);
+  auto ploc = SourceMgr.getPresumedLoc(expr->getBeginLoc());
   auto range = CharSourceRange(expr->getSourceRange(), true);
   auto text = Lexer::getSourceText(range, SourceMgr, LangOpts).str();
   auto &node = (*getProtoFile().mutable_condnodes())[result];
@@ -5232,6 +5240,8 @@ size_t CGDebugInfo::addProtoCondNode(const Expr *expr, std::string sym_name, siz
   text = std::regex_replace(text, std::regex(R"(\n)"), "");
   node.set_sym_name(sym_name);
   node.set_expr(text);
+  node.set_line(ploc.getLine());
+  node.set_column(ploc.getColumn());
   node.set_true_id(tid);
   node.set_false_id(fid);
   return result;
