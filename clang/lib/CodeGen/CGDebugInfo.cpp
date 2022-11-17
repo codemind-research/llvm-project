@@ -5236,7 +5236,7 @@ size_t CGDebugInfo::addProtoCondNode(const Expr *expr, std::string sym_name, siz
   auto eploc = SourceMgr.getPresumedLoc(expr->getEndLoc());
   auto range = CharSourceRange(expr->getSourceRange(), true);
   auto text = Lexer::getSourceText(range, SourceMgr, LangOpts).str();
-  auto &node = (*getProtoFile().mutable_condnodes())[result];
+  auto &node = (*getProtoFile().mutable_conditions())[result];
   text = std::regex_replace(text, std::regex(R"(\\\n)"), "\\n");
   text = std::regex_replace(text, std::regex(R"(\n)"), "");
   node.set_sym_name(sym_name);
@@ -5251,7 +5251,7 @@ size_t CGDebugInfo::addProtoCondNode(const Expr *expr, std::string sym_name, siz
 }
 
 void CGDebugInfo::addProtoCondInfo(size_t file, size_t rid, size_t tid, size_t fid) {
-  auto info = getProtoFile().add_condinfos();
+  auto info = getProtoFile().add_decisions();
   info->set_file_id(file);
   info->set_root_id(rid);
   info->set_true_id(tid);
