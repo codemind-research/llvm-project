@@ -5232,9 +5232,9 @@ size_t CGDebugInfo::addProtoCondNode(const Expr *expr, std::string sym_name, siz
   auto &SourceMgr = ASTContext.getSourceManager();
   auto &LangOpts = ASTContext.getLangOpts();
   auto result = getUniqueID(expr, sym_name);
-  auto sploc = SourceMgr.getPresumedLoc(expr->getBeginLoc());
-  auto eploc = SourceMgr.getPresumedLoc(expr->getEndLoc());
-  auto range = CharSourceRange(expr->getSourceRange(), true);
+  auto range = Lexer::makeFileCharRange(CharSourceRange::getTokenRange(expr->getSourceRange()), SourceMgr, LangOpts);
+  auto sploc = SourceMgr.getPresumedLoc(range.getBegin());
+  auto eploc = SourceMgr.getPresumedLoc(range.getEnd());
   auto text = Lexer::getSourceText(range, SourceMgr, LangOpts).str();
   auto &node = (*getProtoFile().mutable_conditions())[result];
   text = std::regex_replace(text, std::regex(R"(\\\n)"), "\\n");

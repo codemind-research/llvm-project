@@ -2011,7 +2011,7 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
   // MODIFIED: BAE@CODEMIND -------->
   for (const SwitchCase *Case = S.getSwitchCaseList();
        Case;
-      Case = Case->getNextSwitchCase()) {
+       Case = Case->getNextSwitchCase()) {
     if (isa<DefaultStmt>(Case)) {
       auto SwitchMeta = SwitchInsn->getMetadata(llvm::LLVMContext::MD_dbg);
       SwitchInsn->setMetadata("coyote.has_default", SwitchMeta);
