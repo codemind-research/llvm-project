@@ -5125,35 +5125,34 @@ void CGDebugInfo::analysisCondition() {
 }
 
 size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, size_t &rid) {
-  /// 1. 좌측 값에 의해 최적화가 발생하므로 우측부터 데이터 흐름을 작성
-  /// 2. 해당 조건의 sym_name 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
-  /// 3. not의 경우 true id와 false id를 바꿔서 진행
+  // 1. 좌측 값에 의해 최적화가 발생하므로 우측부터 데이터 흐름을 작성
+  // 2. 해당 조건의 sym_name 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
+  // 3. not의 경우 true id와 false id를 바꿔서 진행
   size_t dummy, result = 0;
   expr = expr->IgnoreParens();
   if (auto op = dyn_cast<BinaryOperator>(expr)) {
+    Expr::EvalResult lhs, rhs;
     if (op->getOpcode() == BO_LAnd) {
-      Expr::EvalResult er;
-      if (!op->getLHS()->EvaluateAsInt(er, CGM.getContext())) {
-        if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
+      if (!op->getLHS()->EvaluateAsInt(lhs, CGM.getContext())) {
+        if (!op->getRHS()->EvaluateAsInt(rhs, CGM.getContext()))
           tid = analysisCondition(op->getRHS(), tid, fid, dummy);
-        else if (!er.Val.getInt().getBoolValue())
+        else if (!rhs.Val.getInt().getBoolValue())
           return 0;
         return analysisCondition(op->getLHS(), tid, fid, rid);
-      } else if (er.Val.getInt().getBoolValue()) {
-        if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
+      } else if (lhs.Val.getInt().getBoolValue()) {
+        if (!op->getRHS()->EvaluateAsInt(rhs, CGM.getContext()))
           return analysisCondition(op->getRHS(), tid, fid, rid);
       }
       return 0;
     } else if (op->getOpcode() == BO_LOr) {
-      Expr::EvalResult er;
-      if (!op->getLHS()->EvaluateAsInt(er, CGM.getContext())) {
-        if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
+      if (!op->getLHS()->EvaluateAsInt(lhs, CGM.getContext())) {
+        if (!op->getRHS()->EvaluateAsInt(rhs, CGM.getContext()))
           fid = analysisCondition(op->getRHS(), tid, fid, dummy);
-        else if (er.Val.getInt().getBoolValue())
+        else if (rhs.Val.getInt().getBoolValue())
           return 0;
         return analysisCondition(op->getLHS(), tid, fid, rid);
-      } else if (!er.Val.getInt().getBoolValue()) {
-        if (!op->getRHS()->EvaluateAsInt(er, CGM.getContext()))
+      } else if (!lhs.Val.getInt().getBoolValue()) {
+        if (!op->getRHS()->EvaluateAsInt(rhs, CGM.getContext()))
           return analysisCondition(op->getRHS(), tid, fid, rid);
       }
       return 0;
