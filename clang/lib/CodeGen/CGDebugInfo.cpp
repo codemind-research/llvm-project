@@ -5128,6 +5128,12 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, 
   // 1. 좌측 값에 의해 최적화가 발생하므로 우측부터 데이터 흐름을 작성
   // 2. 해당 조건의 sym_name 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
   // 3. not의 경우 true id와 false id를 바꿔서 진행
+  // 4. Expr의 Evaluate를 하나의 EvalResult로 연속적인 연산은 SideEffect가 발생함
+  //    (각각의 EvalResult를 사용 or SideEffect의 설정이 필요)
+  // 5. if문과 반복문의 일부 llvm code block 형식이 다름
+  //   예) !Variable 같은 간단한 연산으로 구성된 경우
+  //       if는 간단한 연산도 각각의 llvm code block으로 구성
+  //       반복문은 하나의 llvm code block으로 구성
   size_t dummy, result = 0;
   expr = expr->IgnoreParens();
   if (auto op = dyn_cast<BinaryOperator>(expr)) {
@@ -5159,8 +5165,8 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, 
     }
   } else if (auto op = dyn_cast<UnaryOperator>(expr)) {
     if (op->getOpcode() == clang::UnaryOperatorKind::UO_LNot) {
-      tid ^= fid ^= tid ^= fid;
-      return analysisCondition(op->getSubExpr(), tid, fid, rid);
+      if (result = analysisCondition(op->getSubExpr(), fid, tid, rid))
+        return result;
     }
   } else if (auto op = dyn_cast<ConditionalOperator>(expr)) {
     auto ctid = analysisCondition(op->getLHS(), tid, fid, dummy);
