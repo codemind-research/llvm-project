@@ -930,8 +930,13 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   if (auto first = LoopBody->getFirstNonPHI())
     first->setMetadata("coyote.loopbody." + linemark, MD);
   if (auto DI = getDebugInfo()) {
-    DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
-    DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+    // while(false)는 최적화로 삭제되며,
+    // while(true)는 조건없는 br로 변경되어 Evalute 적용
+    Expr::EvalResult er;
+    if (!S.getCond()->EvaluateAsInt(er, getContext())) {
+      DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+      DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+    }
   }
   // <-------------------------------
 }
@@ -1029,8 +1034,12 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
   if (auto first = LoopBody->getFirstNonPHI())
     first->setMetadata("coyote.loopbody." + linemark, MD);
   if (auto DI = getDebugInfo()) {
-    DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
-    DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+    // do-while(false)는 최적화로 br이 삭제되므로 Evalute 적용
+    Expr::EvalResult er;
+    if (!S.getCond()->EvaluateAsInt(er, getContext()) || er.Val.getInt().getBoolValue()) {
+      DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+      DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+    }
   }
   // <-------------------------------
 }
