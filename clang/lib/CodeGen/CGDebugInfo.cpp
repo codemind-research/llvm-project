@@ -5200,7 +5200,7 @@ void CGDebugInfo::addProtoVTable(StringRef tname, StringRef vtname, const VTable
 void CGDebugInfo::addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
   auto pInfo = getProtoFile().mutable_funinfos();
   auto subject = LinkageName.empty() ? Name : LinkageName;
-  auto annotation = codemind_utils::getAnnnotationNameString(nd);
+  auto annotation = codemind_utils::getAnnotationNameString(nd);
   if (subject.empty() && isa_and_nonnull<FunctionDecl>(nd))
     subject  = getFunctionName(dyn_cast<FunctionDecl>(nd));
   (*pInfo)[annotation] = subject.str();
