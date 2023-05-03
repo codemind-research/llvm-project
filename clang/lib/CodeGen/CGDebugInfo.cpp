@@ -5202,7 +5202,7 @@ void CGDebugInfo::addProtoFunction(StringRef Name, StringRef LinkageName, const 
   auto subject = LinkageName.empty() ? Name : LinkageName;
   auto annotation = codemind_utils::getAnnotationNameString(nd);
   if (subject.empty() && isa_and_nonnull<FunctionDecl>(nd))
-    subject  = getFunctionName(dyn_cast<FunctionDecl>(nd));
+    subject = getFunctionName(dyn_cast<FunctionDecl>(nd));
   (*pInfo)[annotation] = subject.str();
 }
 
