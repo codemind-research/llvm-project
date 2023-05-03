@@ -2822,14 +2822,13 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   // Ignore declarations, they will be emitted on their first use.
   if (const auto *FD = dyn_cast<FunctionDecl>(Global)) {
     // Forward declarations are emitted lazily on first use.
+    // MODIFIED: BAE@CODEMIND -------->
+    StringRef MangledName = getMangledName(GD);
+    if (auto DI = getModuleDebugInfo())
+      DI->addProtoFunction("", MangledName, FD);
     if (!FD->doesThisDeclarationHaveABody()) {
-      // MODIFIED: BAE@CODEMIND -------->
-      StringRef MangledName = getMangledName(GD);
-      if (auto DI = getModuleDebugInfo())
-        DI->addProtoFunction("", MangledName, FD);
       if (!FD->doesDeclarationForceExternallyVisibleDefinition())
         return;
-      // <-------------------------------
 
       // Compute the function info and LLVM type.
       const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);
@@ -2839,6 +2838,7 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
                               /*DontDefer=*/false);
       return;
     }
+    // <-------------------------------
   } else {
     const auto *VD = cast<VarDecl>(Global);
     assert(VD->isFileVarDecl() && "Cannot emit local var decl as global.");
