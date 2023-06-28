@@ -5165,7 +5165,7 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, 
     }
   } else if (auto op = dyn_cast<UnaryOperator>(expr)) {
     if (op->getOpcode() == clang::UnaryOperatorKind::UO_LNot) {
-      if (result = analysisCondition(op->getSubExpr(), fid, tid, rid))
+      if ((result = analysisCondition(op->getSubExpr(), fid, tid, rid)))
         return result;
     }
   } else if (auto op = dyn_cast<ConditionalOperator>(expr)) {

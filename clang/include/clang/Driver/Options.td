@@ -5847,3 +5847,9 @@ def _SLASH_Ze : CLFlag<"Ze">;
 def _SLASH_Zg : CLFlag<"Zg">;
 def _SLASH_ZI : CLFlag<"ZI">;
 def _SLASH_ZW : CLJoined<"ZW">;
+
+// MODIFIED: BAE@CODEMIND -------->
+def fcodemind_plugin : Flag<["-"], "fcodemind-plugin">, Flags<[CC1Option]>,
+  HelpText<"Support for codemind plugin">,
+  MarshallingInfoFlag<LangOpts<"CodemindPlugin">>;
+// <-------------------------------

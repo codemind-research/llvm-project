@@ -6497,6 +6497,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(Str));
   }
 
+  // MODIFIED: BAE@CODEMIND -------->
+  Args.AddLastArg(CmdArgs, options::OPT_fcodemind_plugin);
+  // <-------------------------------
+
   // Add the "-o out -x type src.c" flags last. This is done primarily to make
   // the -cc1 command easier to edit when reproducing compiler crashes.
   if (Output.getType() == types::TY_Dependencies) {

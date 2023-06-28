@@ -406,6 +406,10 @@ LANGOPT(RelativeCXXABIVTables, 1, 0,
 
 LANGOPT(ArmSveVectorBits, 32, 0, "SVE vector size in bits")
 
+// MODIFIED: BAE@CODEMIND -------->
+BENIGN_LANGOPT(CodemindPlugin, 1, 0, "Support for codemind plugin")
+// <-------------------------------
+
 #undef LANGOPT
 #undef COMPATIBLE_LANGOPT
 #undef BENIGN_LANGOPT
