@@ -7073,8 +7073,11 @@ ExprResult Sema::CheckTemplateArgument(NonTypeTemplateParmDecl *Param,
                                    ? Context.getIntWidth(IntegerType)
                                    : Context.getTypeSize(IntegerType));
 
+      // MODIFIED: BAE@CODEMIND -------->
       Converted = TemplateArgument(Context, Value,
-                                   Context.getCanonicalType(ParamType));
+                                   Context.getCanonicalType(ParamType),
+                                   ArgResult.get());
+      // <-------------------------------
       return ArgResult;
     }
 

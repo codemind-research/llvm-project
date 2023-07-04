@@ -124,6 +124,9 @@ private:
       const uint64_t *pVal;
     };
     void *Type;
+    // MODIFIED: BAE@CODEMIND -------->
+    Expr *E;
+    // <-------------------------------
   };
   struct A {
     unsigned Kind;
@@ -169,7 +172,8 @@ public:
 
   /// Construct an integral constant template argument. The memory to
   /// store the value is allocated with Ctx.
-  TemplateArgument(ASTContext &Ctx, const llvm::APSInt &Value, QualType Type);
+  TemplateArgument(ASTContext &Ctx, const llvm::APSInt &Value,
+                   QualType Type, Expr *E = nullptr);
 
   /// Construct an integral constant template argument with the same
   /// value as Other but a different type.
@@ -340,8 +344,18 @@ public:
 
   /// Retrieve the template argument as an expression.
   Expr *getAsExpr() const {
-    assert(getKind() == Expression && "Unexpected kind");
-    return reinterpret_cast<Expr *>(TypeOrValue.V);
+    // MODIFIED: BAE@CODEMIND -------->
+    assert((getKind() == Integral || getKind() == Expression) &&
+           "Unexpected kind");
+    switch (getKind()) {
+      case Integral:
+        return Integer.E;
+      case Expression:
+        return reinterpret_cast<Expr *>(TypeOrValue.V);
+      default:
+        return nullptr;
+    }
+    // <-------------------------------
   }
 
   /// Iterator that traverses the elements of a template argument pack.

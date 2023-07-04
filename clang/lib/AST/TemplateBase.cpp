@@ -85,7 +85,7 @@ static void printIntegral(const TemplateArgument &TemplArg,
 //===----------------------------------------------------------------------===//
 
 TemplateArgument::TemplateArgument(ASTContext &Ctx, const llvm::APSInt &Value,
-                                   QualType Type) {
+                                   QualType Type, Expr *E) {
   Integer.Kind = Integral;
   // Copy the APSInt value into our decomposed form.
   Integer.BitWidth = Value.getBitWidth();
@@ -101,6 +101,9 @@ TemplateArgument::TemplateArgument(ASTContext &Ctx, const llvm::APSInt &Value,
   }
 
   Integer.Type = Type.getAsOpaquePtr();
+  // MODIFIED: BAE@CODEMIND -------->
+  Integer.E = E;
+  // <-------------------------------
 }
 
 TemplateArgument
