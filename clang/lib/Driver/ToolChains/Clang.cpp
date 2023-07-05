@@ -6498,7 +6498,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   // MODIFIED: BAE@CODEMIND -------->
-  Args.AddLastArg(CmdArgs, options::OPT_fcodemind_plugin);
+  Args.AddLastArg(CmdArgs, options::OPT_fcoyote_clang);
+  Args.AddLastArg(CmdArgs, options::OPT_fcoyote_dbg_symbol);
   // <-------------------------------
 
   // Add the "-o out -x type src.c" flags last. This is done primarily to make

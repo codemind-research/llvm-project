@@ -781,23 +781,25 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   EmitBlock(ContBlock, /*IsFinished=*/true);
 
   // MODIFIED: RHO@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  auto MD = getFileData(S.getSourceRange());
-  ThenBlock->front().setMetadata("coyote.then." + linemark, MD);
-  if(!ElseBlock->empty())
-    ElseBlock->front().setMetadata("coyote.else." + linemark, MD);
-  if(!isFree && !ContBlock->empty())
-    ContBlock->front().setMetadata("coyote.ifcont." + linemark, MD);
-  if (auto DI = getDebugInfo())
-    DI->addDecisionTrace(S.getCond(),
-                         "coyote.then." + linemark,
-                         ElseBlock->empty() ? "" : "coyote.else." + linemark);
+  if (getLangOpts().CoyoteDbgSymbol) {
+    auto getFileData = [&](const SourceRange &R) {
+      CGDebugInfo *debug = getDebugInfo();
+      llvm::DILocation *loc = nullptr;
+      if (debug != nullptr)
+        loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
+      return (loc == nullptr) ? nullptr : loc->getFile();
+    };
+    auto MD = getFileData(S.getSourceRange());
+    ThenBlock->front().setMetadata("coyote.then." + linemark, MD);
+    if(!ElseBlock->empty())
+      ElseBlock->front().setMetadata("coyote.else." + linemark, MD);
+    if(!isFree && !ContBlock->empty())
+      ContBlock->front().setMetadata("coyote.ifcont." + linemark, MD);
+    if (auto DI = getDebugInfo())
+      DI->addDecisionTrace(S.getCond(),
+                           "coyote.then." + linemark,
+                           ElseBlock->empty() ? "" : "coyote.else." + linemark);
+  }
   // <-------------------------------
 }
 
@@ -879,7 +881,8 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
 
     // MODIFIED: RHO@CODEMIND -------->
     auto inst =  Builder.CreateCondBr(BoolCondVal, LoopBody, ExitBlock, Weights);
-    inst->setMetadata("coyote.loopcond." + linemark, MD);
+    if (getLangOpts().CoyoteDbgSymbol)
+      inst->setMetadata("coyote.loopcond." + linemark, MD);
     // <-------------------------------
 
     if (ExitBlock != LoopExit.getBlock()) {
@@ -925,17 +928,19 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
     SimplifyForwardingBlocks(LoopHeader.getBlock());
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (auto first = LoopHeader.getBlock()->getFirstNonPHI())
-    first->setMetadata("coyote.loop." + linemark, MD);
-  if (auto first = LoopBody->getFirstNonPHI())
-    first->setMetadata("coyote.loopbody." + linemark, MD);
-  if (auto DI = getDebugInfo()) {
-    // while(false)는 최적화로 삭제되며,
-    // while(true)는 조건없는 br로 변경되어 Evalute 적용
-    Expr::EvalResult er;
-    if (!S.getCond()->EvaluateAsInt(er, getContext())) {
-      DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
-      DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+  if (getLangOpts().CoyoteDbgSymbol) {
+    if (auto first = LoopHeader.getBlock()->getFirstNonPHI())
+      first->setMetadata("coyote.loop." + linemark, MD);
+    if (auto first = LoopBody->getFirstNonPHI())
+      first->setMetadata("coyote.loopbody." + linemark, MD);
+    if (auto DI = getDebugInfo()) {
+      // while(false)는 최적화로 삭제되며,
+      // while(true)는 조건없는 br로 변경되어 Evalute 적용
+      Expr::EvalResult er;
+      if (!S.getCond()->EvaluateAsInt(er, getContext())) {
+        DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+        DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+      }
     }
   }
   // <-------------------------------
@@ -1014,7 +1019,8 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     auto inst = Builder.CreateCondBr(
         BoolCondVal, LoopBody, LoopExit.getBlock(),
         createProfileWeightsForLoop(S.getCond(), BackedgeCount));
-    inst->setMetadata("coyote.loopcond." + linemark, MD);
+    if (getLangOpts().CoyoteDbgSymbol)
+      inst->setMetadata("coyote.loopcond." + linemark, MD);
     // <-------------------------------
   }
 
@@ -1029,16 +1035,18 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     SimplifyForwardingBlocks(LoopCond.getBlock());
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (auto first = LoopCond.getBlock()->getFirstNonPHI())
-    first->setMetadata("coyote.loop." + linemark, MD);
-  if (auto first = LoopBody->getFirstNonPHI())
-    first->setMetadata("coyote.loopbody." + linemark, MD);
-  if (auto DI = getDebugInfo()) {
-    // do-while(false)는 최적화로 br이 삭제되므로 Evalute 적용
-    Expr::EvalResult er;
-    if (!S.getCond()->EvaluateAsInt(er, getContext()) || er.Val.getInt().getBoolValue()) {
-      DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
-      DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+  if (getLangOpts().CoyoteDbgSymbol) {
+    if (auto first = LoopCond.getBlock()->getFirstNonPHI())
+      first->setMetadata("coyote.loop." + linemark, MD);
+    if (auto first = LoopBody->getFirstNonPHI())
+      first->setMetadata("coyote.loopbody." + linemark, MD);
+    if (auto DI = getDebugInfo()) {
+      // do-while(false)는 최적화로 br이 삭제되므로 Evalute 적용
+      Expr::EvalResult er;
+      if (!S.getCond()->EvaluateAsInt(er, getContext()) || er.Val.getInt().getBoolValue()) {
+        DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+        DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+      }
     }
   }
   // <-------------------------------
@@ -1139,7 +1147,8 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
 
     // MODIFIED: RHO@CODEMIND -------->
     auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
-    inst->setMetadata("coyote.loopcond." + linemark, MD);
+    if (getLangOpts().CoyoteDbgSymbol)
+      inst->setMetadata("coyote.loopcond." + linemark, MD);
     // <-------------------------------
 
     if (ExitBlock != LoopExit.getBlock()) {
@@ -1182,7 +1191,7 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
   EmitBlock(LoopExit.getBlock(), true);
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (S.getCond() != nullptr) {
+  if (getLangOpts().CoyoteDbgSymbol && S.getCond() != nullptr) {
     if (auto first = CondBlock->getFirstNonPHI())
       first->setMetadata("coyote.loop." + linemark, MD);
     if (auto first = ForBody != nullptr ? ForBody->getFirstNonPHI() : nullptr)
@@ -1254,7 +1263,8 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
 
   // MODIFIED: RHO@CODEMIND -------->
   auto inst = Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
-  inst->setMetadata("coyote.loopcond." + linemark, MD);
+  if (getLangOpts().CoyoteDbgSymbol)
+    inst->setMetadata("coyote.loopcond." + linemark, MD);
   // <-------------------------------
 
   if (ExitBlock != LoopExit.getBlock()) {
@@ -1295,13 +1305,15 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
   EmitBlock(LoopExit.getBlock(), true);
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (auto first = CondBlock->getFirstNonPHI())
-    first->setMetadata("coyote.loop." + linemark, MD);
-  if (auto first = ForBody->getFirstNonPHI())
-    first->setMetadata("coyote.loopbody." + linemark, MD);
-  if (auto DI = getDebugInfo()) {
-    DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
-    DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+  if (getLangOpts().CoyoteDbgSymbol) {
+    if (auto first = CondBlock->getFirstNonPHI())
+      first->setMetadata("coyote.loop." + linemark, MD);
+    if (auto first = ForBody->getFirstNonPHI())
+      first->setMetadata("coyote.loopbody." + linemark, MD);
+    if (auto DI = getDebugInfo()) {
+      DI->addConditionTrace(S.getCond(), "coyote.loop." + linemark);
+      DI->addDecisionTrace(S.getCond(), "coyote.loopbody." + linemark, "");
+    }
   }
   // <-------------------------------
 }
@@ -2018,13 +2030,15 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
   llvm::BasicBlock *DefaultBlock = createBasicBlock("sw.default");
   SwitchInsn = Builder.CreateSwitch(CondV, DefaultBlock);
   // MODIFIED: BAE@CODEMIND -------->
-  for (const SwitchCase *Case = S.getSwitchCaseList();
-       Case;
-       Case = Case->getNextSwitchCase()) {
-    if (isa<DefaultStmt>(Case)) {
-      auto SwitchMeta = SwitchInsn->getMetadata(llvm::LLVMContext::MD_dbg);
-      SwitchInsn->setMetadata("coyote.has_default", SwitchMeta);
-      break;
+  if (getLangOpts().CoyoteDbgSymbol) {
+    for (const SwitchCase *Case = S.getSwitchCaseList();
+         Case;
+         Case = Case->getNextSwitchCase()) {
+      if (isa<DefaultStmt>(Case)) {
+        auto SwitchMeta = SwitchInsn->getMetadata(llvm::LLVMContext::MD_dbg);
+        SwitchInsn->setMetadata("coyote.has_default", SwitchMeta);
+        break;
+      }
     }
   }
   // <-------------------------------

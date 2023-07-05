@@ -5849,7 +5849,10 @@ def _SLASH_ZI : CLFlag<"ZI">;
 def _SLASH_ZW : CLJoined<"ZW">;
 
 // MODIFIED: BAE@CODEMIND -------->
-def fcodemind_plugin : Flag<["-"], "fcodemind-plugin">, Flags<[CC1Option]>,
-  HelpText<"Support for codemind plugin">,
-  MarshallingInfoFlag<LangOpts<"CodemindPlugin">>;
+def fcoyote_clang : Flag<["-"], "fcoyote-clang">, Flags<[CC1Option]>,
+  HelpText<"Support for coyote clang">,
+  MarshallingInfoFlag<LangOpts<"CoyoteClang">>;
+def fcoyote_dbg_symbol : Flag<["-"], "fcoyote-dbg-symbol">, Flags<[CC1Option]>,
+  HelpText<"Support for coyote debug symbol">,
+  MarshallingInfoFlag<LangOpts<"CoyoteDbgSymbol">>;
 // <-------------------------------

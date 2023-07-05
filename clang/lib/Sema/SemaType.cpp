@@ -2352,7 +2352,7 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
         if (!MPTy->getClass()->isDependentType())
           (void)isCompleteType(Loc, T);
   // MODIFIED: BAE@CODEMIND -------->
-  } else if (!LangOpts.CodemindPlugin) {
+  } else if (!LangOpts.CoyoteClang) {
   // <-------------------------------
     // C99 6.7.5.2p1: If the element type is an incomplete or function type,
     // reject it (e.g. void ary[7], struct foo ary[7], void ary[7]())

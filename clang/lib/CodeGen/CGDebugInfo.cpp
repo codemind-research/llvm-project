@@ -1750,9 +1750,10 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
   SPCache[Method->getCanonicalDecl()].reset(SP);
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (!IsCtorOrDtor) {
+  if (CGM.getLangOpts().CoyoteDbgSymbol) {
     // 생성자, 소멸자는 emitFunctionStart에서 처리
-    addProtoFunction(MethodName, MethodLinkageName, Method);
+    if (!IsCtorOrDtor)
+      addProtoFunction(MethodName, MethodLinkageName, Method);
   }
   // <-------------------------------
 
@@ -3922,12 +3923,14 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
     RegionMap[D].reset(SP);
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (auto fd = dyn_cast_or_null<FunctionDecl>(D)) {
-    // 생성자, 소멸자를 제외한 Method의 경우 중복 데이터 방지를 위해 Cache 체크를 진행
-    auto FI = SPCache.find(fd->getCanonicalDecl());
-    bool IsCtorOrDtor = isa<CXXConstructorDecl>(fd) || isa<CXXDestructorDecl>(fd);
-    if (IsCtorOrDtor || FI == SPCache.end())
-      addProtoFunction(Name, LinkageName, fd);
+  if (CGM.getLangOpts().CoyoteDbgSymbol) {
+    if (auto fd = dyn_cast_or_null<FunctionDecl>(D)) {
+      // 생성자, 소멸자를 제외한 Method의 경우 중복 데이터 방지를 위해 Cache 체크를 진행
+      auto FI = SPCache.find(fd->getCanonicalDecl());
+      bool IsCtorOrDtor = isa<CXXConstructorDecl>(fd) || isa<CXXDestructorDecl>(fd);
+      if (IsCtorOrDtor || FI == SPCache.end())
+        addProtoFunction(Name, LinkageName, fd);
+    }
   }
   // <-------------------------------
 }

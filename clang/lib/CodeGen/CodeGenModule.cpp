@@ -2824,8 +2824,10 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
     // Forward declarations are emitted lazily on first use.
     // MODIFIED: BAE@CODEMIND -------->
     StringRef MangledName = getMangledName(GD);
-    if (auto DI = getModuleDebugInfo())
-      DI->addProtoFunction("", MangledName, FD);
+    if (getLangOpts().CoyoteDbgSymbol) {
+      if (auto DI = getModuleDebugInfo())
+        DI->addProtoFunction("", MangledName, FD);
+    }
     if (!FD->doesThisDeclarationHaveABody()) {
       if (!FD->doesDeclarationForceExternallyVisibleDefinition())
         return;

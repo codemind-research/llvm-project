@@ -1774,10 +1774,12 @@ void ItaniumCXXABI::emitVTableDefinitions(CodeGenVTables &CGVT,
     CGVT.GenerateRelativeVTableAlias(VTable, VTable->getName());
 
   // MODIFIED: BAE@CODEMIND -------->
-  if (auto DI = CGM.getModuleDebugInfo()) {
-    auto qt = RD->getTypeForDecl()->getCanonicalTypeInternal();
-    auto lt = CGM.getTypes().ConvertType(qt);
-    DI->addProtoVTable(lt->getStructName(), VTable->getName(), VTLayout);
+  if (CGM.getLangOpts().CoyoteDbgSymbol) {
+    if (auto DI = CGM.getModuleDebugInfo()) {
+      auto qt = RD->getTypeForDecl()->getCanonicalTypeInternal();
+      auto lt = CGM.getTypes().ConvertType(qt);
+      DI->addProtoVTable(lt->getStructName(), VTable->getName(), VTLayout);
+    }
   }
   // <-------------------------------
 }

@@ -4225,7 +4225,7 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
       // MODIFIED: BAE@CODEMIND -------->
       auto trace = Trace.empty() ? Trace : Trace + ".and";
       Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
-      if (!trace.empty()) {
+      if (CGF.getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
         if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
           first->setMetadata(trace.c_str(), MD);
           if (auto DI = CGF.getDebugInfo())
@@ -4283,7 +4283,7 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
   auto trace = Trace.empty() ? Trace : Trace + ".and";
   Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
-  if (!trace.empty()) {
+  if (CGF.getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
     if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
       first->setMetadata(trace.c_str(), MD);
       if (auto DI = CGF.getDebugInfo())
@@ -4372,7 +4372,7 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
       // MODIFIED: BAE@CODEMIND -------->
       auto trace = Trace.empty() ? Trace : Trace + ".or";
       Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
-      if (!trace.empty()) {
+      if (CGF.getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
         if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
           first->setMetadata(trace.c_str(), MD);
           if (auto DI = CGF.getDebugInfo())
@@ -4432,7 +4432,7 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
   auto trace = Trace.empty() ? Trace : Trace + ".or";
   Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
-  if (!trace.empty()) {
+  if (CGF.getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
     if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
       first->setMetadata(trace.c_str(), MD);
       if (auto DI = CGF.getDebugInfo())
@@ -4629,12 +4629,14 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   eval.begin(CGF);
   Value *LHS = Visit(lhsExpr);
   // MODIFIED: BAE@CODEMIND -------->
-  if (!Trace.empty()) {
+  if (CGF.getLangOpts().CoyoteDbgSymbol) {
     auto trace = Trace.empty() ? Trace : Trace + ".lhs";
-    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
-      first->setMetadata(trace.c_str(), MD);
-      if (auto DI = CGF.getDebugInfo())
-        DI->addConditionTrace(E->getTrueExpr(), trace.c_str());
+    if (!trace.empty()) {
+      if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
+        first->setMetadata(trace.c_str(), MD);
+        if (auto DI = CGF.getDebugInfo())
+          DI->addConditionTrace(E->getTrueExpr(), trace.c_str());
+      }
     }
   }
   // <-------------------------------
@@ -4647,12 +4649,14 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   eval.begin(CGF);
   Value *RHS = Visit(rhsExpr);
   // MODIFIED: BAE@CODEMIND -------->
-  if (!Trace.empty()) {
+  if (CGF.getLangOpts().CoyoteDbgSymbol) {
     auto trace = Trace.empty() ? Trace : Trace + ".rhs";
-    if (auto first = Builder.GetInsertBlock()->getFirstNonPHI())
-      first->setMetadata(trace.c_str(), MD);
-    if (auto DI = CGF.getDebugInfo())
-      DI->addConditionTrace(E->getFalseExpr(), trace.c_str());
+    if (!trace.empty()) {
+      if (auto first = Builder.GetInsertBlock()->getFirstNonPHI())
+        first->setMetadata(trace.c_str(), MD);
+      if (auto DI = CGF.getDebugInfo())
+        DI->addConditionTrace(E->getFalseExpr(), trace.c_str());
+    }
   }
   // <-------------------------------
   eval.end(CGF);

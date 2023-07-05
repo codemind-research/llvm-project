@@ -1895,7 +1895,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
 
   // MODIFIED: RHO@CODEMIND -------->
   auto inst = Builder.CreateCondBr(CondV, TrueBlock, FalseBlock, Weights, Unpredictable);
-  if(!trace.empty()) {
+  if (getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
     // branch 분석 : br instruction
     if (inst)
       inst->setMetadata(trace.c_str(), MD);
