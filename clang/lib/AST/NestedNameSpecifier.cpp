@@ -260,10 +260,14 @@ void NestedNameSpecifier::print(raw_ostream &OS, const PrintingPolicy &Policy,
     break;
 
   case Namespace:
-    if (getAsNamespace()->isAnonymousNamespace())
-      return;
-
-    OS << getAsNamespace()->getName();
+    // MODIFIED: BAE@CODEMIND -------->
+    if (getAsNamespace()->isAnonymousNamespace()) {
+      if (Policy.PrintingHelper == nullptr)
+        return;
+      Policy.PrintingHelper(getAsNamespace(), OS);
+    } else
+      OS << getAsNamespace()->getName();
+    // <-------------------------------
     break;
 
   case NamespaceAlias:

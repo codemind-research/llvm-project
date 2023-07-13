@@ -273,6 +273,10 @@ struct PrintingPolicy {
   /// invalid C++ code.
   unsigned PrintInjectedClassNameWithArguments : 1;
 
+  // MODIFIED: BAE@CODEMIND -------->
+  void (*PrintingHelper)(const DeclContext *, raw_ostream &) = nullptr;
+  // <-------------------------------
+
   /// Callbacks to use to allow the behavior of printing to be customized.
   const PrintingCallbacks *Callbacks = nullptr;
 };

@@ -1217,8 +1217,13 @@ void TypePrinter::printDependentExtIntAfter(const DependentExtIntType *T,
 /// Appends the given scope to the end of a string.
 void TypePrinter::AppendScope(DeclContext *DC, raw_ostream &OS,
                               DeclarationName NameInScope) {
-  if (DC->isTranslationUnit())
+  // MODIFIED: BAE@CODEMIND -------->
+  if (DC->isTranslationUnit()) {
+    if (Policy.PrintingHelper != nullptr)
+      Policy.PrintingHelper(DC, OS);
     return;
+  }
+  // <-------------------------------
 
   // FIXME: Consider replacing this with NamedDecl::printNestedNameSpecifier,
   // which can also print names for function and method scopes.
@@ -1242,6 +1247,10 @@ void TypePrinter::AppendScope(DeclContext *DC, raw_ostream &OS,
     AppendScope(DC->getParent(), OS, NS->getDeclName());
     if (NS->getIdentifier())
       OS << NS->getName() << "::";
+    // MODIFIED: BAE@CODEMIND -------->
+    else if (Policy.PrintingHelper != nullptr)
+      Policy.PrintingHelper(DC, OS);
+    // <-------------------------------
     else
       OS << "(anonymous namespace)::";
   } else if (const auto *Spec = dyn_cast<ClassTemplateSpecializationDecl>(DC)) {
@@ -1255,10 +1264,15 @@ void TypePrinter::AppendScope(DeclContext *DC, raw_ostream &OS,
     OS << "::";
   } else if (const auto *Tag = dyn_cast<TagDecl>(DC)) {
     AppendScope(DC->getParent(), OS, Tag->getDeclName());
-    if (TypedefNameDecl *Typedef = Tag->getTypedefNameForAnonDecl())
-      OS << Typedef->getIdentifier()->getName() << "::";
-    else if (Tag->getIdentifier())
+    // MODIFIED: BAE@CODEMIND -------->
+    if (Tag->getIdentifier())
       OS << Tag->getIdentifier()->getName() << "::";
+    else if (Policy.PrintingHelper != nullptr) {
+      Policy.PrintingHelper(DC, OS);
+      OS << "::";
+    } else if (TypedefNameDecl *Typedef = Tag->getTypedefNameForAnonDecl())
+      OS << Typedef->getIdentifier()->getName() << "::";
+    // <-------------------------------
     else
       return;
   } else {
@@ -1293,6 +1307,10 @@ void TypePrinter::printTag(TagDecl *D, raw_ostream &OS) {
 
   if (const IdentifierInfo *II = D->getIdentifier())
     OS << II->getName();
+  // MODIFIED: BAE@CODEMIND -------->
+  else if (Policy.PrintingHelper != nullptr)
+    Policy.PrintingHelper(D, OS);
+  // <-------------------------------
   else if (TypedefNameDecl *Typedef = D->getTypedefNameForAnonDecl()) {
     assert(Typedef->getIdentifier() && "Typedef without identifier?");
     OS << Typedef->getIdentifier()->getName();
@@ -1491,13 +1509,22 @@ void TypePrinter::printElaboratedBefore(const ElaboratedType *T,
     OS << TypeWithKeyword::getKeywordName(T->getKeyword());
     if (T->getKeyword() != ETK_None)
       OS << " ";
-    NestedNameSpecifier *Qualifier = T->getQualifier();
-    if (Qualifier)
-      Qualifier->print(OS, Policy);
+    // MODIFIED: BAE@CODEMIND -------->
+    if (Policy.SuppressScope) {
+      NestedNameSpecifier *Qualifier = T->getQualifier();
+      if (Qualifier)
+        Qualifier->print(OS, Policy);
+    }
+    // <-------------------------------
   }
 
-  ElaboratedTypePolicyRAII PolicyRAII(Policy);
-  printBefore(T->getNamedType(), OS);
+  // MODIFIED: BAE@CODEMIND -------->
+  if (Policy.SuppressScope) {
+    ElaboratedTypePolicyRAII PolicyRAII(Policy);
+    printBefore(T->getNamedType(), OS);
+  } else
+    printBefore(T->getNamedType(), OS);
+  // <-------------------------------
 }
 
 void TypePrinter::printElaboratedAfter(const ElaboratedType *T,
@@ -2030,11 +2057,15 @@ static void printTo(raw_ostream &OS, ArrayRef<TA> Args,
     }
     StringRef ArgString = ArgOS.str();
 
-    // If this is the first argument and its string representation
-    // begins with the global scope specifier ('::foo'), add a space
-    // to avoid printing the diagraph '<:'.
-    if (FirstArg && !ArgString.empty() && ArgString[0] == ':')
-      OS << ' ';
+    // MODIFIED: BAE@CODEMIND -------->
+    if (Policy.PrintingHelper == nullptr) {
+      // If this is the first argument and its string representation
+      // begins with the global scope specifier ('::foo'), add a space
+      // to avoid printing the diagraph '<:'.
+      if (FirstArg && !ArgString.empty() && ArgString[0] == ':')
+        OS << ' ';
+    }
+    // <-------------------------------
 
     OS << ArgString;
 

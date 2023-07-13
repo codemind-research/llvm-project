@@ -1564,10 +1564,15 @@ void NamedDecl::printQualifiedName(raw_ostream &OS,
     SmallString<64> NameBuffer;
     llvm::raw_svector_ostream NameOS(NameBuffer);
     printName(NameOS);
-    if (NameBuffer.empty())
-      OS << "(anonymous)";
-    else
+    // MODIFIED: BAE@CODEMIND -------->
+    if (NameBuffer.empty()) {
+      if (P.PrintingHelper != nullptr)
+        P.PrintingHelper(cast<DeclContext>(this), OS);
+      else
+        OS << "(anonymous)";
+    } else
       OS << NameBuffer;
+    // <-------------------------------
   }
 }
 
@@ -1632,16 +1637,27 @@ void NamedDecl::printNestedNameSpecifier(raw_ostream &OS,
           Spec->getSpecializedTemplate()->getTemplateParameters());
     } else if (const auto *ND = dyn_cast<NamespaceDecl>(DC)) {
       if (ND->isAnonymousNamespace()) {
-        OS << (P.MSVCFormatting ? "`anonymous namespace\'"
-                                : "(anonymous namespace)");
+        // MODIFIED: BAE@CODEMIND -------->
+        if (P.PrintingHelper != nullptr)
+          P.PrintingHelper(DC, OS);
+        else if (P.MSVCFormatting)
+          OS << "`anonymous namespace\'";
+        else
+          OS << "(anonymous namespace)";
+        // <-------------------------------
       }
       else
         OS << *ND;
     } else if (const auto *RD = dyn_cast<RecordDecl>(DC)) {
-      if (!RD->getIdentifier())
-        OS << "(anonymous " << RD->getKindName() << ')';
-      else
+      // MODIFIED: BAE@CODEMIND -------->
+      if (!RD->getIdentifier()) {
+        if (P.PrintingHelper != nullptr)
+          P.PrintingHelper(DC, OS);
+        else
+          OS << "(anonymous " << RD->getKindName() << ')';
+      } else
         OS << *RD;
+      // <-------------------------------
     } else if (const auto *FD = dyn_cast<FunctionDecl>(DC)) {
       const FunctionProtoType *FT = nullptr;
       if (FD->hasWrittenPrototype())
