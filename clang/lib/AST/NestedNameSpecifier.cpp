@@ -251,37 +251,51 @@ bool NestedNameSpecifier::containsErrors() const {
 /// stream.
 void NestedNameSpecifier::print(raw_ostream &OS, const PrintingPolicy &Policy,
                                 bool ResolveTemplateArguments) const {
-  if (getPrefix())
-    getPrefix()->print(OS, Policy);
-
+  // MODIFIED: BAE@CODEMIND -------->
   switch (getKind()) {
   case Identifier:
+    if (getPrefix())
+      getPrefix()->print(OS, Policy);
     OS << getAsIdentifier()->getName();
     break;
 
   case Namespace:
-    // MODIFIED: BAE@CODEMIND -------->
     if (getAsNamespace()->isAnonymousNamespace()) {
-      if (Policy.PrintingHelper == nullptr)
-        return;
-      Policy.PrintingHelper(getAsNamespace(), OS);
-    } else
+      if (getPrefix())
+        getPrefix()->print(OS, Policy);
+      return;
+    }
+    if (Policy.PrintingHelper == nullptr) {
+      if (getPrefix())
+        getPrefix()->print(OS, Policy);
       OS << getAsNamespace()->getName();
-    // <-------------------------------
+    } else
+      getAsNamespace()->printQualifiedName(OS, Policy);
     break;
 
   case NamespaceAlias:
-    OS << getAsNamespaceAlias()->getName();
+    if (Policy.PrintingHelper == nullptr) {
+      if (getPrefix())
+        getPrefix()->print(OS, Policy);
+      OS << getAsNamespaceAlias()->getName();
+    } else
+      getAsNamespaceAlias()->printQualifiedName(OS, Policy);
     break;
 
   case Global:
+    if (getPrefix())
+      getPrefix()->print(OS, Policy);
     break;
 
   case Super:
+    if (getPrefix())
+      getPrefix()->print(OS, Policy);
     OS << "__super";
     break;
 
   case TypeSpecWithTemplate:
+    if (getPrefix())
+      getPrefix()->print(OS, Policy);
     OS << "template ";
     // Fall through to print the type.
     LLVM_FALLTHROUGH;
@@ -291,7 +305,12 @@ void NestedNameSpecifier::print(raw_ostream &OS, const PrintingPolicy &Policy,
             dyn_cast_or_null<ClassTemplateSpecializationDecl>(getAsRecordDecl());
     if (ResolveTemplateArguments && Record) {
         // Print the type trait with resolved template parameters.
-        Record->printName(OS);
+        if (Policy.PrintingHelper == nullptr) {
+          if (getPrefix())
+            getPrefix()->print(OS, Policy);
+          Record->printName(OS);
+        } else
+          Record->printQualifiedName(OS, Policy);
         printTemplateArgumentList(OS, Record->getTemplateArgs().asArray(),
                                   Policy);
         break;
@@ -299,7 +318,11 @@ void NestedNameSpecifier::print(raw_ostream &OS, const PrintingPolicy &Policy,
     const Type *T = getAsType();
 
     PrintingPolicy InnerPolicy(Policy);
-    InnerPolicy.SuppressScope = true;
+    if (Policy.PrintingHelper == nullptr) {
+      if (getPrefix())
+        getPrefix()->print(OS, Policy);
+      InnerPolicy.SuppressScope = true;
+    }
 
     // Nested-name-specifiers are intended to contain minimally-qualified
     // types. An actual ElaboratedType will not occur, since we'll store
@@ -334,6 +357,7 @@ void NestedNameSpecifier::print(raw_ostream &OS, const PrintingPolicy &Policy,
     break;
   }
   }
+  // <-------------------------------
 
   OS << "::";
 }

@@ -1618,17 +1618,29 @@ void NamedDecl::printNestedNameSpecifier(raw_ostream &OS,
             Ctx->getParent()->lookup(NameInScope).size())
       continue;
 
-    // Skip non-named contexts such as linkage specifications and ExportDecls.
-    const NamedDecl *ND = dyn_cast<NamedDecl>(Ctx);
-    if (!ND)
-      continue;
+    // MODIFIED: BAE@CODEMIND -------->
+    if (!Ctx->isTranslationUnit()) {
+      // Skip non-named contexts such as linkage specifications and ExportDecls.
+      const NamedDecl *ND = dyn_cast<NamedDecl>(Ctx);
+      if (!ND)
+        continue;
+      NameInScope = ND->getDeclName();
+    }
+    // <-------------------------------
 
     Contexts.push_back(Ctx);
-    NameInScope = ND->getDeclName();
   }
 
   for (unsigned I = Contexts.size(); I != 0; --I) {
     const DeclContext *DC = Contexts[I - 1];
+    // MODIFIED: BAE@CODEMIND -------->
+    if (DC->isTranslationUnit()) {
+      if (P.PrintingHelper != nullptr)
+        P.PrintingHelper(DC, OS);
+      continue;
+    }
+    // <-------------------------------
+
     if (const auto *Spec = dyn_cast<ClassTemplateSpecializationDecl>(DC)) {
       OS << Spec->getName();
       const TemplateArgumentList &TemplateArgs = Spec->getTemplateArgs();

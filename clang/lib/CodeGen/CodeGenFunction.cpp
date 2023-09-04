@@ -1637,20 +1637,14 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
                                            std::string trace,
                                            Stmt::Likelihood LH) {
   // MODIFIED: RHO@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  llvm::MDNode *MD = getFileData(Cond->getSourceRange());
+  llvm::MDNode *MD = nullptr;
+  if (auto DI = getDebugInfo())
+    MD = DI->getFileNode(Cond->getBeginLoc());
   // <-------------------------------
 
   Cond = Cond->IgnoreParens();
 
   if (const BinaryOperator *CondBOp = dyn_cast<BinaryOperator>(Cond)) {
-
     // Handle X && Y in a condition.
     if (CondBOp->getOpcode() == BO_LAnd) {
       // If we have "1 && X", simplify the code.  "0 && X" would have constant
@@ -1663,7 +1657,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // MODIFIED: RHO@CODEMIND -------->
         return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd,
                                         TrueBlock, FalseBlock,
-                                        trace.empty()?trace:trace + ".and1",
+                                        trace.empty() ? trace : trace + ".and1",
                                         TrueCount, LH);
         // <-------------------------------
       }
@@ -1677,7 +1671,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // MODIFIED: RHO@CODEMIND -------->
         return EmitBranchToCounterBlock(CondBOp->getLHS(), BO_LAnd,
                                         TrueBlock, FalseBlock,
-                                        trace.empty()?trace:trace + ".and2",
+                                        trace.empty() ? trace : trace + ".and2",
                                         TrueCount, LH, CondBOp);
         // <-------------------------------
       }
@@ -1698,7 +1692,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
 
         // MODIFIED: RHO@CODEMIND -------->
         EmitBranchOnBoolExpr(CondBOp->getLHS(), LHSTrue, FalseBlock, RHSCount,
-                             trace.empty()?trace:trace + ".and3",
+                             trace.empty() ? trace : trace + ".and3",
                              LH == Stmt::LH_Unlikely ? Stmt::LH_None : LH);
         EmitBlock(LHSTrue);
         // <-------------------------------
@@ -1711,7 +1705,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       eval.begin(*this);
       // MODIFIED: RHO@CODEMIND -------->
       EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LAnd, TrueBlock, FalseBlock,
-                               trace.empty()?trace:trace + ".and4",
+                               trace.empty() ? trace : trace + ".and4",
                                TrueCount, LH);
       // <-------------------------------
       eval.end(*this);
@@ -1730,7 +1724,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // MODIFIED: RHO@CODEMIND -------->
         return EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr,
                                         TrueBlock, FalseBlock,
-                                        trace.empty()?trace:trace + ".or1",
+                                        trace.empty() ? trace : trace + ".or1",
                                         TrueCount, LH);
         // <-------------------------------
       }
@@ -1743,7 +1737,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         // MODIFIED: RHO@CODEMIND -------->
         return EmitBranchToCounterBlock(CondBOp->getLHS(), BO_LOr,
                                         TrueBlock, FalseBlock,
-                                        trace.empty()?trace:trace + ".or2",
+                                        trace.empty() ? trace : trace + ".or2",
                                         TrueCount, LH, CondBOp);
         // <-------------------------------
       }
@@ -1766,7 +1760,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
         ApplyDebugLocation DL(*this, Cond);
         // MODIFIED: RHO@CODEMIND -------->
         EmitBranchOnBoolExpr(CondBOp->getLHS(), TrueBlock, LHSFalse, LHSCount,
-                             trace.empty()?trace:trace + ".or3",
+                             trace.empty() ? trace : trace + ".or3",
                              LH == Stmt::LH_Likely ? Stmt::LH_None : LH);
         EmitBlock(LHSFalse);
         // <-------------------------------
@@ -1780,7 +1774,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       // MODIFIED: RHO@CODEMIND -------->
       EmitBranchToCounterBlock(CondBOp->getRHS(), BO_LOr,
                                TrueBlock, FalseBlock,
-                               trace.empty()?trace:trace + ".or4",
+                               trace.empty() ? trace : trace + ".or4",
                                RHSCount, LH);
       // <-------------------------------
       eval.end(*this);
@@ -1800,7 +1794,8 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
       // MODIFIED: RHO@CODEMIND -------->
       return EmitBranchOnBoolExpr(CondUOp->getSubExpr(), FalseBlock,
                                   TrueBlock, FalseCount,
-                                  trace.empty()?trace:trace + ".neg", LH);
+                                  trace.empty() ? trace : trace + ".neg1",
+                                  LH);
       // <-------------------------------
     }
   }
@@ -1816,7 +1811,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     // MODIFIED: RHO@CODEMIND -------->
     EmitBranchOnBoolExpr(CondOp->getCond(), LHSBlock, RHSBlock,
                          getProfileCount(CondOp),
-                         trace.empty()?trace:trace + ".sel1",
+                         trace.empty() ? trace : trace + ".tcond1",
                          Stmt::LH_None);
     // <-------------------------------
 
@@ -1835,24 +1830,33 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     cond.begin(*this);
     EmitBlock(LHSBlock);
     incrementProfileCounter(CondOp);
-    {
-      ApplyDebugLocation DL(*this, Cond);
-      // MODIFIED: RHO@CODEMIND -------->
-      EmitBranchOnBoolExpr(CondOp->getLHS(), TrueBlock, FalseBlock,
-                           LHSScaledTrueCount, trace.empty()?trace:trace + ".sel2",
-                           LH);
-      // <-------------------------------                           
-    }
+    ApplyDebugLocation DL(*this, Cond);
+    // MODIFIED: RHO@CODEMIND -------->
+    auto ltrace = trace.empty() ? trace : trace + ".ttt1";
+    EmitBranchOnBoolExpr(CondOp->getLHS(), TrueBlock, FalseBlock,
+                         LHSScaledTrueCount,
+                         ltrace, LH);
+    // <-------------------------------
     cond.end(*this);
 
     cond.begin(*this);
     EmitBlock(RHSBlock);
     // MODIFIED: RHO@CODEMIND -------->
+    auto rtrace = trace.empty() ? trace : trace + ".tff1";
     EmitBranchOnBoolExpr(CondOp->getRHS(), TrueBlock, FalseBlock,
                          TrueCount - LHSScaledTrueCount,
-                         trace.empty()?trace:trace  + ".sel3", LH);
+                         rtrace, LH);
     // <-------------------------------                         
     cond.end(*this);
+
+    // MODIFIED: BAE@CODEMIND -------->
+    if (getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
+      if (auto DI = getDebugInfo()) {
+        DI->addConditionTrace(CondOp, trace.c_str());
+        DI->addTernaryTrace(CondOp, ltrace.c_str(), rtrace.c_str());
+      }
+    }
+    // <-------------------------------
 
     return;
   }
@@ -1890,7 +1894,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
   llvm::Value *CondV;
   {
     ApplyDebugLocation DL(*this, Cond);
-    CondV = EvaluateExprAsBool(Cond);
+    CondV = EvaluateExprAsBool(Cond, trace);
   }
 
   // MODIFIED: RHO@CODEMIND -------->

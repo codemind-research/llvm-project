@@ -2825,8 +2825,10 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
     // MODIFIED: BAE@CODEMIND -------->
     StringRef MangledName = getMangledName(GD);
     if (getLangOpts().CoyoteDbgSymbol) {
-      if (auto DI = getModuleDebugInfo())
-        DI->addProtoFunction("", MangledName, FD);
+      if (!isa<CXXConstructorDecl, CXXDestructorDecl>(FD)) {
+        if (auto DI = getModuleDebugInfo())
+          DI->addProtoFunction("", MangledName, FD);
+      }
     }
     if (!FD->doesThisDeclarationHaveABody()) {
       if (!FD->doesDeclarationForceExternallyVisibleDefinition())
@@ -3588,6 +3590,15 @@ llvm::Constant *CodeGenModule::GetAddrOfFunction(GlobalDecl GD,
   }
 
   StringRef MangledName = getMangledName(GD);
+  // MODIFIED: BAE@CODEMIND -------->
+  if (getLangOpts().CoyoteDbgSymbol) {
+    auto FD = cast<FunctionDecl>(GD.getDecl());
+    if (!isa<CXXConstructorDecl, CXXDestructorDecl>(FD)) {
+      if (auto DI = getModuleDebugInfo())
+        DI->addProtoFunction("", MangledName, FD);
+    }
+  }
+  // <-------------------------------
   return GetOrCreateLLVMFunction(MangledName, Ty, GD, ForVTable, DontDefer,
                                  /*IsThunk=*/false, llvm::AttributeList(),
                                  IsForDefinition);

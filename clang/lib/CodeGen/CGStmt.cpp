@@ -31,11 +31,9 @@
 #include "llvm/Support/SaveAndRestore.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/LLVMContext.h"
-#include <iostream>
 
 using namespace clang;
 using namespace CodeGen;
-using namespace std;
 
 //===----------------------------------------------------------------------===//
 //                              Statement Emission
@@ -681,12 +679,9 @@ void CodeGenFunction::EmitIndirectGotoStmt(const IndirectGotoStmt &S) {
 
 void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   // MODIFIED: RHO@CODEMIND -------->
-  auto getLineMark = [&](const SourceRange &R) {
-    auto &SourceManager = getContext().getSourceManager();
-    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-  };
-  auto linemark = getLineMark(S.getSourceRange());
+  std::string linemark = "";
+  if (auto DI = getDebugInfo())
+    linemark = DI->getTraceLineMark(S.getBeginLoc());
   // <-------------------------------
 
   // C99 6.8.4.1: The first substatement is executed if the expression compares
@@ -782,14 +777,9 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
 
   // MODIFIED: RHO@CODEMIND -------->
   if (getLangOpts().CoyoteDbgSymbol) {
-    auto getFileData = [&](const SourceRange &R) {
-      CGDebugInfo *debug = getDebugInfo();
-      llvm::DILocation *loc = nullptr;
-      if (debug != nullptr)
-        loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-      return (loc == nullptr) ? nullptr : loc->getFile();
-    };
-    auto MD = getFileData(S.getSourceRange());
+    llvm::MDNode *MD = nullptr;
+    if (auto DI = getDebugInfo())
+      MD = DI->getFileNode(S.getBeginLoc());
     ThenBlock->front().setMetadata("coyote.then." + linemark, MD);
     if(!ElseBlock->empty())
       ElseBlock->front().setMetadata("coyote.else." + linemark, MD);
@@ -806,20 +796,12 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
 void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
                                     ArrayRef<const Attr *> WhileAttrs) {
   // MODIFIED: BAE@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  auto getLineMark = [&](const SourceRange &R) {
-    auto &SourceManager = getContext().getSourceManager();
-    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-  };
-  auto MD = getFileData(S.getSourceRange());
-  auto linemark = getLineMark(S.getSourceRange());
+  llvm::MDNode *MD = nullptr;
+  std::string linemark = "";
+  if (auto DI = getDebugInfo()) {
+    MD = DI->getFileNode(S.getBeginLoc());
+    linemark = DI->getTraceLineMark(S.getBeginLoc());
+  }
   // <-------------------------------
 
   // Emit the header for the loop, which will also become
@@ -949,20 +931,12 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
 void CodeGenFunction::EmitDoStmt(const DoStmt &S,
                                  ArrayRef<const Attr *> DoAttrs) {
   // MODIFIED: RHO@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  auto getLineMark = [&](const SourceRange &R) {
-    auto &SourceManager = getContext().getSourceManager();
-    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-  };
-  auto MD = getFileData(S.getSourceRange());
-  auto linemark = getLineMark(S.getSourceRange());
+  llvm::MDNode *MD = nullptr;
+  std::string linemark = "";
+  if (auto DI = getDebugInfo()) {
+    MD = DI->getFileNode(S.getBeginLoc());
+    linemark = DI->getTraceLineMark(S.getBeginLoc());
+  }
   // <-------------------------------
 
   JumpDest LoopExit = getJumpDestInCurrentScope("do.end");
@@ -1055,20 +1029,12 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
 void CodeGenFunction::EmitForStmt(const ForStmt &S,
                                   ArrayRef<const Attr *> ForAttrs) {
   // MODIFIED: RHO@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  auto getLineMark = [&](const SourceRange &R) {
-    auto &SourceManager = getContext().getSourceManager();
-    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-  };
-  auto MD = getFileData(S.getSourceRange());
-  auto linemark = getLineMark(S.getSourceRange());
+  llvm::MDNode *MD = nullptr;
+  std::string linemark = "";
+  if (auto DI = getDebugInfo()) {
+    MD = DI->getFileNode(S.getBeginLoc());
+    linemark = DI->getTraceLineMark(S.getBeginLoc());
+  }
   // <-------------------------------
 
   JumpDest LoopExit = getJumpDestInCurrentScope("for.end");
@@ -1208,20 +1174,12 @@ void
 CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
                                      ArrayRef<const Attr *> ForAttrs) {
   // MODIFIED: RHO@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  auto getLineMark = [&](const SourceRange &R) {
-    auto &SourceManager = getContext().getSourceManager();
-    auto pLoc = SourceManager.getPresumedLoc(R.getBegin());
-    return to_string(pLoc.getLine()) + "-" + to_string(pLoc.getColumn());
-  };
-  auto MD = getFileData(S.getSourceRange());
-  auto linemark = getLineMark(S.getSourceRange());
+  llvm::MDNode *MD = nullptr;
+  std::string linemark = "";
+  if (auto DI = getDebugInfo()) {
+    MD = DI->getFileNode(S.getBeginLoc());
+    linemark = DI->getTraceLineMark(S.getBeginLoc());
+  }
   // <-------------------------------
 
   JumpDest LoopExit = getJumpDestInCurrentScope("for.end");
@@ -1413,9 +1371,14 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     RValue Result = EmitReferenceBindingToExpr(RV);
     Builder.CreateStore(Result.getScalarVal(), ReturnValue);
   } else {
+    // MODIFIED: BAE@CODEMIND -------->
+    std::string linemark = "";
+    if (auto DI = getDebugInfo())
+      linemark = DI->getTraceLineMark(RV->getBeginLoc());
     switch (getEvaluationKind(RV->getType())) {
     case TEK_Scalar:
-      Builder.CreateStore(EmitScalarExpr(RV), ReturnValue);
+      Builder.CreateStore(EmitScalarExpr(RV, false, "coyote.any." + linemark + ".ret"),
+                          ReturnValue);
       break;
     case TEK_Complex:
       EmitComplexExprIntoLValue(RV, MakeAddrLValue(ReturnValue, RV->getType()),
@@ -1430,6 +1393,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
                           getOverlapForReturnValue()));
       break;
     }
+    // <-------------------------------
   }
 
   ++NumReturnExprs;
@@ -1967,6 +1931,11 @@ getLikelihoodWeights(ArrayRef<Stmt::Likelihood> Likelihoods) {
 }
 
 void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
+  // MODIFIED: BAE@CODEMIND -------->
+  std::string linemark = "";
+  if (auto DI = getDebugInfo())
+    linemark = DI->getTraceLineMark(S.getBeginLoc());
+  // <-------------------------------
   // Handle nested switch statements.
   llvm::SwitchInst *SavedSwitchInsn = SwitchInsn;
   SmallVector<uint64_t, 16> *SavedSwitchWeights = SwitchWeights;
@@ -2021,7 +1990,9 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
 
   if (S.getConditionVariable())
     EmitDecl(*S.getConditionVariable());
-  llvm::Value *CondV = EmitScalarExpr(S.getCond());
+  // MODIFIED: BAE@CODEMIND -------->
+  llvm::Value *CondV = EmitScalarExpr(S.getCond(), false, "coyote.sw." + linemark);
+  // <-------------------------------
 
   // Create basic block to hold stuff that comes after switch
   // statement. We also need to create a default block now so that
