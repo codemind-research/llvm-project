@@ -476,6 +476,12 @@ void TypePrinter::printMemberPointerBefore(const MemberPointerType *T,
   // FIXME: this should include vectors, but vectors use attributes I guess.
   if (isa<ArrayType>(T->getPointeeType()))
     OS << '(';
+  // MODIFIED: BAE@CODEMIND -------->
+  else if (!Policy.SuppressScope && Policy.PrintingHelper != nullptr) {
+    if (isa<TypedefType>(T->getPointeeType()))
+      OS << '(';
+  }
+  // <-------------------------------
 
   PrintingPolicy InnerPolicy(Policy);
   InnerPolicy.IncludeTagDefinition = false;
@@ -492,6 +498,12 @@ void TypePrinter::printMemberPointerAfter(const MemberPointerType *T,
   // FIXME: this should include vectors, but vectors use attributes I guess.
   if (isa<ArrayType>(T->getPointeeType()))
     OS << ')';
+  // MODIFIED: BAE@CODEMIND -------->
+  else if (!Policy.SuppressScope && Policy.PrintingHelper != nullptr) {
+    if (isa<TypedefType>(T->getPointeeType()))
+      OS << ')';
+  }
+  // <-------------------------------
   printAfter(T->getPointeeType(), OS);
 }
 
@@ -1217,14 +1229,6 @@ void TypePrinter::printDependentExtIntAfter(const DependentExtIntType *T,
 /// Appends the given scope to the end of a string.
 void TypePrinter::AppendScope(DeclContext *DC, raw_ostream &OS,
                               DeclarationName NameInScope) {
-  // MODIFIED: BAE@CODEMIND -------->
-  if (DC->isTranslationUnit()) {
-    if (Policy.PrintingHelper != nullptr)
-      Policy.PrintingHelper(DC, OS);
-    return;
-  }
-  // <-------------------------------
-
   // FIXME: Consider replacing this with NamedDecl::printNestedNameSpecifier,
   // which can also print names for function and method scopes.
   if (DC->isFunctionOrMethod())
@@ -1248,10 +1252,11 @@ void TypePrinter::AppendScope(DeclContext *DC, raw_ostream &OS,
     if (NS->getIdentifier())
       OS << NS->getName() << "::";
     // MODIFIED: BAE@CODEMIND -------->
-    else if (Policy.PrintingHelper != nullptr)
+    else if (Policy.PrintingHelper != nullptr) {
       Policy.PrintingHelper(DC, OS);
+      OS << "::";
     // <-------------------------------
-    else
+    } else
       OS << "(anonymous namespace)::";
   } else if (const auto *Spec = dyn_cast<ClassTemplateSpecializationDecl>(DC)) {
     AppendScope(DC->getParent(), OS, Spec->getDeclName());
@@ -1275,6 +1280,11 @@ void TypePrinter::AppendScope(DeclContext *DC, raw_ostream &OS,
     // <-------------------------------
     else
       return;
+  // MODIFIED: BAE@CODEMIND -------->
+  } else if (DC->isTranslationUnit()) {
+    if (Policy.PrintingHelper != nullptr)
+      Policy.PrintingHelper(DC, OS);
+  // <-------------------------------
   } else {
     AppendScope(DC->getParent(), OS, NameInScope);
   }

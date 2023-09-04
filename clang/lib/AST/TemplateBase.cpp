@@ -386,12 +386,7 @@ void TemplateArgument::print(const PrintingPolicy &Policy,
     break;
 
   case Integral:
-    // MODIFIED: BAE@CODEMIND -------->
-    if (Policy.PrintingHelper != nullptr && getAsExpr() != nullptr)
-      getAsExpr()->printPretty(Out, nullptr, Policy);
-    else
-      printIntegral(*this, Out, Policy);
-    // <-------------------------------
+    printIntegral(*this, Out, Policy);
     break;
 
   case Expression:

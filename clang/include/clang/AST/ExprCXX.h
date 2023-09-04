@@ -978,6 +978,9 @@ public:
   bool isArrow() const { return IsArrow; }
   SourceLocation getMemberLoc() const { return MemberLoc; }
   NestedNameSpecifierLoc getQualifierLoc() const { return QualifierLoc; }
+  NestedNameSpecifier *getQualifier() const {
+    return QualifierLoc.getNestedNameSpecifier();
+  }
 };
 
 /// MS property subscript expression.

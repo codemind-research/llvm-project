@@ -283,6 +283,12 @@ public:
   /// any.
   NestedNameSpecifierLoc getQualifierLoc() const { return QualifierLoc; }
 
+  /// If the name was qualified, retrieves the nested-name-specifier
+  /// that precedes the name. Otherwise, returns NULL.
+  NestedNameSpecifier *getQualifier() const {
+    return QualifierLoc.getNestedNameSpecifier();
+  }
+
   /// Retrieve the name of the entity we're testing for, along with
   /// location information
   DeclarationNameInfo getNameInfo() const { return NameInfo; }

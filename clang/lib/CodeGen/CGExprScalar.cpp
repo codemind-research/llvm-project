@@ -2945,8 +2945,12 @@ Value *ScalarExprEmitter::VisitUnaryImag(const UnaryOperator *E) {
 BinOpInfo ScalarExprEmitter::EmitBinOps(const BinaryOperator *E) {
   TestAndClearIgnoreResultAssign();
   BinOpInfo Result;
-  Result.LHS = Visit(E->getLHS());
-  Result.RHS = Visit(E->getRHS());
+  // MODIFIED: BAE@CODEMIND -------->
+  auto ltrace = Trace.empty() ? Trace : Trace + ".lhs1";
+  auto rtrace = Trace.empty() ? Trace : Trace + ".rhs1";
+  Result.LHS = CGF.EmitScalarExpr(E->getLHS(), IgnoreResultAssign, ltrace);
+  Result.RHS = CGF.EmitScalarExpr(E->getRHS(), IgnoreResultAssign, rtrace);
+  // <-------------------------------
   Result.Ty  = E->getType();
   Result.Opcode = E->getOpcode();
   Result.FPFeatures = E->getFPFeaturesInEffect(CGF.getLangOpts());
@@ -4183,14 +4187,9 @@ Value *ScalarExprEmitter::VisitBinAssign(const BinaryOperator *E) {
 
 Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = CGF.getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  llvm::MDNode *MD = getFileData(E->getSourceRange());
+  llvm::MDNode *MD = nullptr;
+  if (auto DI = CGF.getDebugInfo())
+    MD = DI->getFileNode(E->getBeginLoc());
   // <-------------------------------
   // Perform vector logical and on comparisons with zero vectors.
   if (E->getType()->isVectorType()) {
@@ -4223,7 +4222,7 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
       CGF.incrementProfileCounter(E);
 
       // MODIFIED: BAE@CODEMIND -------->
-      auto trace = Trace.empty() ? Trace : Trace + ".and";
+      auto trace = Trace.empty() ? Trace : Trace + ".and5";
       Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
       if (CGF.getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
         if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
@@ -4263,10 +4262,12 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
 
   CodeGenFunction::ConditionalEvaluation eval(CGF);
 
+  // MODIFIED: BAE@CODEMIND -------->
   // Branch on the LHS first.  If it is false, go to the failure (cont) block.
   CGF.EmitBranchOnBoolExpr(E->getLHS(), RHSBlock, ContBlock,
                            CGF.getProfileCount(E->getRHS()),
-                           Trace);
+                           Trace.empty() ? Trace : Trace + ".and6");
+  // <-------------------------------
 
   // Any edges into the ContBlock are now from an (indeterminate number of)
   // edges from this first condition.  All of these values will be false.  Start
@@ -4281,7 +4282,7 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
   CGF.EmitBlock(RHSBlock);
   CGF.incrementProfileCounter(E);
   // MODIFIED: BAE@CODEMIND -------->
-  auto trace = Trace.empty() ? Trace : Trace + ".and";
+  auto trace = Trace.empty() ? Trace : Trace + ".and7";
   Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
   if (CGF.getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
     if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
@@ -4330,14 +4331,9 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
 
 Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = CGF.getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  llvm::MDNode *MD = getFileData(E->getSourceRange());
+  llvm::MDNode *MD = nullptr;
+  if (auto DI = CGF.getDebugInfo())
+    MD = DI->getFileNode(E->getBeginLoc());
   // <-------------------------------
   // Perform vector logical or on comparisons with zero vectors.
   if (E->getType()->isVectorType()) {
@@ -4370,7 +4366,7 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
       CGF.incrementProfileCounter(E);
 
       // MODIFIED: BAE@CODEMIND -------->
-      auto trace = Trace.empty() ? Trace : Trace + ".or";
+      auto trace = Trace.empty() ? Trace : Trace + ".or5";
       Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
       if (CGF.getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
         if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
@@ -4410,11 +4406,13 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
 
   CodeGenFunction::ConditionalEvaluation eval(CGF);
 
+  // MODIFIED: BAE@CODEMIND -------->
   // Branch on the LHS first.  If it is true, go to the success (cont) block.
   CGF.EmitBranchOnBoolExpr(E->getLHS(), ContBlock, RHSBlock,
                            CGF.getCurrentProfileCount() -
                                CGF.getProfileCount(E->getRHS()),
-                           Trace);
+                           Trace.empty() ? Trace : Trace + ".or6");
+  // <-------------------------------
 
   // Any edges into the ContBlock are now from an (indeterminate number of)
   // edges from this first condition.  All of these values will be true.  Start
@@ -4430,7 +4428,7 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
   // Emit the RHS condition as a bool value.
   CGF.EmitBlock(RHSBlock);
   // MODIFIED: BAE@CODEMIND -------->
-  auto trace = Trace.empty() ? Trace : Trace + ".or";
+  auto trace = Trace.empty() ? Trace : Trace + ".or7";
   Value *RHSCond = CGF.EvaluateExprAsBool(E->getRHS(), trace);
   if (CGF.getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
     if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
@@ -4497,14 +4495,9 @@ static bool isCheapEnoughToEvaluateUnconditionally(const Expr *E,
 Value *ScalarExprEmitter::
 VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
-  auto getFileData = [&](const SourceRange &R) {
-    CGDebugInfo *debug = CGF.getDebugInfo();
-    llvm::DILocation *loc = nullptr;
-    if (debug != nullptr)
-      loc = debug->SourceLocToDebugLoc(R.getBegin()).get();
-    return (loc == nullptr) ? nullptr : loc->getFile();
-  };
-  llvm::MDNode *MD = getFileData(E->getSourceRange());
+  llvm::MDNode *MD = nullptr;
+  if (auto DI = CGF.getDebugInfo())
+    MD = DI->getFileNode(E->getBeginLoc());
   // <-------------------------------
   TestAndClearIgnoreResultAssign();
 
@@ -4600,7 +4593,10 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   // safe to evaluate the LHS and RHS unconditionally.
   if (isCheapEnoughToEvaluateUnconditionally(lhsExpr, CGF) &&
       isCheapEnoughToEvaluateUnconditionally(rhsExpr, CGF)) {
-    llvm::Value *CondV = CGF.EvaluateExprAsBool(condExpr);
+    // MODIFIED: BAE@CODEMIND -------->
+    auto trace = Trace.empty() ? Trace : Trace + ".tcond2";
+    llvm::Value *CondV = CGF.EvaluateExprAsBool(condExpr, trace);
+    // <-------------------------------
     llvm::Value *StepV = Builder.CreateZExtOrBitCast(CondV, CGF.Int64Ty);
 
     CGF.incrementProfileCounter(E, StepV);
@@ -4612,7 +4608,20 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
       assert(!RHS && "LHS and RHS types must match");
       return nullptr;
     }
-    return Builder.CreateSelect(CondV, LHS, RHS, "cond");
+    // MODIFIED: BAE@CODEMIND -------->
+    llvm::Value *Select = Builder.CreateSelect(CondV, LHS, RHS, "cond");
+    if (CGF.getLangOpts().CoyoteDbgSymbol && !Trace.empty()) {
+      auto trace = Trace + ".sel2";
+      if (auto Inst = dyn_cast_or_null<llvm::SelectInst>(Select)) {
+        Inst->setMetadata(trace.c_str(), MD);
+        if (auto DI = CGF.getDebugInfo()) {
+          DI->addConditionTrace(condExpr, trace.c_str());
+          DI->addTernaryTrace(E, trace.c_str(), trace.c_str());
+        }
+      }
+    }
+    return Select;
+    // <-------------------------------
   }
 
   llvm::BasicBlock *LHSBlock = CGF.createBasicBlock("cond.true");
@@ -4620,25 +4629,18 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   llvm::BasicBlock *ContBlock = CGF.createBasicBlock("cond.end");
 
   CodeGenFunction::ConditionalEvaluation eval(CGF);
+  // MODIFIED: BAE@CODEMIND -------->
   CGF.EmitBranchOnBoolExpr(condExpr, LHSBlock, RHSBlock,
                            CGF.getProfileCount(lhsExpr),
-                           Trace);
+                           Trace.empty() ? Trace : Trace + ".tcond3");
+  // <-------------------------------
 
   CGF.EmitBlock(LHSBlock);
   CGF.incrementProfileCounter(E);
   eval.begin(CGF);
-  Value *LHS = Visit(lhsExpr);
   // MODIFIED: BAE@CODEMIND -------->
-  if (CGF.getLangOpts().CoyoteDbgSymbol) {
-    auto trace = Trace.empty() ? Trace : Trace + ".lhs";
-    if (!trace.empty()) {
-      if (auto first = Builder.GetInsertBlock()->getFirstNonPHI()) {
-        first->setMetadata(trace.c_str(), MD);
-        if (auto DI = CGF.getDebugInfo())
-          DI->addConditionTrace(E->getTrueExpr(), trace.c_str());
-      }
-    }
-  }
+  auto ltrace = Trace.empty() ? Trace : Trace + ".ttt3";
+  Value *LHS = CGF.EmitScalarExpr(lhsExpr, IgnoreResultAssign, ltrace);
   // <-------------------------------
   eval.end(CGF);
 
@@ -4647,22 +4649,28 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
 
   CGF.EmitBlock(RHSBlock);
   eval.begin(CGF);
-  Value *RHS = Visit(rhsExpr);
   // MODIFIED: BAE@CODEMIND -------->
-  if (CGF.getLangOpts().CoyoteDbgSymbol) {
-    auto trace = Trace.empty() ? Trace : Trace + ".rhs";
-    if (!trace.empty()) {
-      if (auto first = Builder.GetInsertBlock()->getFirstNonPHI())
-        first->setMetadata(trace.c_str(), MD);
-      if (auto DI = CGF.getDebugInfo())
-        DI->addConditionTrace(E->getFalseExpr(), trace.c_str());
-    }
-  }
+  auto rtrace = Trace.empty() ? Trace : Trace + ".tff3";
+  Value *RHS = CGF.EmitScalarExpr(rhsExpr, IgnoreResultAssign, rtrace);
   // <-------------------------------
   eval.end(CGF);
 
   RHSBlock = Builder.GetInsertBlock();
   CGF.EmitBlock(ContBlock);
+
+  // MODIFIED: BAE@CODEMIND -------->
+  if (CGF.getLangOpts().CoyoteDbgSymbol && !Trace.empty()) {
+    if (auto first = LHSBlock->getFirstNonPHI())
+      first->setMetadata(ltrace.c_str(), MD);
+    if (auto first = RHSBlock->getFirstNonPHI())
+      first->setMetadata(rtrace.c_str(), MD);
+    if (auto DI = CGF.getDebugInfo()) {
+      DI->addConditionTrace(lhsExpr, ltrace.c_str());
+      DI->addConditionTrace(rhsExpr, rtrace.c_str());
+      DI->addTernaryTrace(E, ltrace.c_str(), rtrace.c_str());
+    }
+  }
+  // <-------------------------------
 
   // If the LHS or RHS is a throw expression, it will be legitimately null.
   if (!LHS)

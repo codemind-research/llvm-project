@@ -102,11 +102,16 @@ class CGDebugInfo {
   llvm::SmallDenseMap<QualType, llvm::Metadata *> SizeExprCache;
 
   // MODIFIED: BAE@CODEMIND -------->
-  using Decision = std::tuple<std::string, std::string>;
+  struct DecisionTrace {
+    const Expr *expr;
+    std::string true_symbol;
+    std::string false_symbol;
+  };
 
   std::unique_ptr<highlander::proto::emit::EmitOut> protoFile;
-  std::map<const Expr*, Decision> cond;
-  std::map<const Expr*, std::string> syms;
+  std::vector<DecisionTrace> traceDecision;
+  std::vector<DecisionTrace> traceTernary;
+  std::map<const Expr*, std::string> traceSymbol;
   // <-------------------------------
 
   /// Callbacks to use when printing names and types.
@@ -755,17 +760,27 @@ private:
   void finalizeProto();
   highlander::proto::emit::EmitOut &getProtoFile();
   size_t getUniqueID(std::string key);
-  size_t getUniqueID(const Expr *expr, std::string sym_name);
-  void analysisCondition();
-  size_t analysisCondition(const Expr *expr, size_t tid, size_t fid, size_t &rid);
+  size_t getUniqueID(const Expr *expr, std::string tag);
+  void makeTernary();
+  void makeDecision();
+  size_t analysisCondition(const Expr *expr, size_t tid, size_t fid);
+  size_t analysisBinLAnd(const BinaryOperator *bo, size_t tid, size_t fid);
+  size_t analysisBinLOr(const BinaryOperator *bo, size_t tid, size_t fid);
+  size_t analysisUnaryLNot(const UnaryOperator *uo, size_t tid, size_t fid);
+  size_t analysisConditional(const ConditionalOperator *co, size_t tid, size_t fid);
 public:
+  llvm::DIFile *getFileNode(SourceLocation loc);
+  std::string getTraceLineMark(SourceLocation loc);
   void addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout);
   void addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
   size_t addProtoFile(SourceLocation loc);
-  size_t addProtoCondNode(const Expr *expr, std::string sym_name, size_t tid, size_t fid);
-  void addProtoCondInfo(size_t file, size_t rid, size_t tid, size_t fid);
-  void addDecisionTrace(const Expr *expr, std::string tsym_name, std::string fsym_name);
-  void addConditionTrace(const Expr *expr, std::string sym_name);
+  size_t addProtoExpr(const Expr *expr);
+  size_t addProtoCondition(std::string symbol, const Expr *expr, size_t tid, size_t fid);
+  void addProtoTernary(const Expr *expr, size_t rid, size_t tid, size_t fid);
+  void addProtoDecision(const Expr *expr, size_t rid, size_t tid, size_t fid);
+  void addConditionTrace(const Expr *expr, std::string symbol);
+  void addTernaryTrace(const Expr *expr, std::string true_symbol, std::string false_symbol);
+  void addDecisionTrace(const Expr *expr, std::string true_symbol, std::string false_symbol);
   // <-------------------------------
 };
 

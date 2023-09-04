@@ -223,9 +223,17 @@ bool TemplateName::containsUnexpandedParameterPack() const {
 void
 TemplateName::print(raw_ostream &OS, const PrintingPolicy &Policy,
                     bool SuppressNNS) const {
-  if (TemplateDecl *Template = Storage.dyn_cast<TemplateDecl *>())
-    OS << *Template;
-  else if (QualifiedTemplateName *QTN = getAsQualifiedTemplateName()) {
+  if (TemplateDecl *Template = Storage.dyn_cast<TemplateDecl *>()) {
+    // MODIFIED: BAE@CODEMIND -------->
+    if (Policy.PrintingHelper != nullptr) {
+      if (!Policy.SuppressScope)
+        Template->printQualifiedName(OS);
+      else
+        Template->printName(OS);
+    } else
+      OS << *Template;
+    // <-------------------------------
+  } else if (QualifiedTemplateName *QTN = getAsQualifiedTemplateName()) {
     if (!SuppressNNS)
       QTN->getQualifier()->print(OS, Policy);
     if (QTN->hasTemplateKeyword())

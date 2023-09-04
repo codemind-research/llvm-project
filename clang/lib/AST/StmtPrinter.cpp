@@ -64,6 +64,58 @@ using namespace clang;
 
 namespace {
 
+  // MODIFIED: BAE@CODEMIND -------->
+  // 참고: clang/lib/AST/TypePrinter.cpp - IncludeStrongLifetimeRAII
+  class IncludeStrongLifetimeRAII {
+    PrintingPolicy &Policy;
+    bool Old;
+
+  public:
+    explicit IncludeStrongLifetimeRAII(PrintingPolicy &Policy)
+        : Policy(Policy), Old(Policy.SuppressStrongLifetime) {
+      Policy.SuppressStrongLifetime = false;
+    }
+
+    ~IncludeStrongLifetimeRAII() {
+      Policy.SuppressStrongLifetime = Old;
+    }
+  };
+
+  class SuppressPrintingHelperRAII {
+    PrintingPolicy &Policy;
+    void (*Old)(const DeclContext *, raw_ostream &);
+
+  public:
+    explicit SuppressPrintingHelperRAII(PrintingPolicy &Policy)
+        : Policy(Policy), Old(Policy.PrintingHelper) {
+      Policy.PrintingHelper = nullptr;
+    }
+
+    ~SuppressPrintingHelperRAII() {
+      Policy.PrintingHelper = Old;
+    }
+  };
+
+  class SuppressTranslationUnitRAII : public PrintingCallbacks {
+    PrintingPolicy &Policy;
+    const PrintingCallbacks *Old;
+
+  public:
+    explicit SuppressTranslationUnitRAII(PrintingPolicy &Policy)
+        : Policy(Policy), Old(Policy.Callbacks) {
+      Policy.Callbacks = this;
+    }
+
+    ~SuppressTranslationUnitRAII() {
+      Policy.Callbacks = Old;
+    }
+
+    bool isScopeVisible(const DeclContext *DC) const final {
+      return DC->isTranslationUnit();
+    }
+  };
+  // <-------------------------------
+
   class StmtPrinter : public StmtVisitor<StmtPrinter> {
     raw_ostream &OS;
     unsigned IndentLevel;
@@ -162,6 +214,10 @@ namespace {
 #define STMT(CLASS, PARENT) \
     void Visit##CLASS(CLASS *Node);
 #include "clang/AST/StmtNodes.inc"
+    // MODIFIED: BAE@CODEMIND -------->
+    void AppendScope(DeclContext *DC, raw_ostream &OS,
+                     DeclarationName NameInScope);
+    // <-------------------------------
   };
 
 } // namespace
@@ -364,8 +420,7 @@ void StmtPrinter::VisitMSDependentExistsStmt(MSDependentExistsStmt *Node) {
   else
     OS << "__if_not_exists (";
 
-  if (NestedNameSpecifier *Qualifier
-        = Node->getQualifierLoc().getNestedNameSpecifier())
+  if (NestedNameSpecifier *Qualifier = Node->getQualifier())
     Qualifier->print(OS, Policy);
 
   OS << Node->getNameInfo() << ") ";
@@ -976,6 +1031,14 @@ void StmtPrinter::VisitDeclRefExpr(DeclRefExpr *Node) {
   }
   if (NestedNameSpecifier *Qualifier = Node->getQualifier())
     Qualifier->print(OS, Policy);
+  // MODIFIED: BAE@CODEMIND -------->
+  else if (!Policy.SuppressScope && Policy.PrintingHelper != nullptr) {
+    SuppressTranslationUnitRAII raii(Policy);
+    AppendScope(Node->getDecl()->getDeclContext(),
+                OS,
+                Node->getNameInfo().getName());
+  }
+  // <-------------------------------
   if (Node->hasTemplateKeyword())
     OS << "template ";
   OS << Node->getNameInfo();
@@ -995,8 +1058,8 @@ void StmtPrinter::VisitDependentScopeDeclRefExpr(
 }
 
 void StmtPrinter::VisitUnresolvedLookupExpr(UnresolvedLookupExpr *Node) {
-  if (Node->getQualifier())
-    Node->getQualifier()->print(OS, Policy);
+  if (NestedNameSpecifier *Qualifier = Node->getQualifier())
+    Qualifier->print(OS, Policy);
   if (Node->hasTemplateKeyword())
     OS << "template ";
   OS << Node->getNameInfo();
@@ -1433,8 +1496,10 @@ void StmtPrinter::VisitMemberExpr(MemberExpr *Node) {
     if (FD->isAnonymousStructOrUnion())
       return;
 
-  if (NestedNameSpecifier *Qualifier = Node->getQualifier())
+  if (NestedNameSpecifier *Qualifier = Node->getQualifier()) {
+    SuppressPrintingHelperRAII raii(Policy);
     Qualifier->print(OS, Policy);
+  }
   if (Node->hasTemplateKeyword())
     OS << "template ";
   OS << Node->getMemberNameInfo();
@@ -1828,8 +1893,7 @@ void StmtPrinter::VisitMSPropertyRefExpr(MSPropertyRefExpr *Node) {
     OS << "->";
   else
     OS << ".";
-  if (NestedNameSpecifier *Qualifier =
-      Node->getQualifierLoc().getNestedNameSpecifier())
+  if (NestedNameSpecifier *Qualifier = Node->getQualifier())
     Qualifier->print(OS, Policy);
   OS << Node->getPropertyDecl()->getDeclName();
 }
@@ -2141,8 +2205,8 @@ void StmtPrinter::VisitCXXPseudoDestructorExpr(CXXPseudoDestructorExpr *E) {
     OS << "->";
   else
     OS << '.';
-  if (E->getQualifier())
-    E->getQualifier()->print(OS, Policy);
+  if (NestedNameSpecifier *Qualifier = E->getQualifier())
+    Qualifier->print(OS, Policy);
   OS << "~";
 
   if (IdentifierInfo *II = E->getDestroyedTypeIdentifier())
@@ -2555,6 +2619,62 @@ void StmtPrinter::VisitAsTypeExpr(AsTypeExpr *Node) {
   Node->getType().print(OS, Policy);
   OS << ")";
 }
+
+// MODIFIED: BAE@CODEMIND -------->
+// 참고: clang/lib/AST/TypePrinter.cpp - TypePrinter::AppendScope
+void StmtPrinter::AppendScope(DeclContext *DC, raw_ostream &OS,
+                              DeclarationName NameInScope) {
+  if (DC->isFunctionOrMethod())
+    return;
+
+  if (Policy.Callbacks && Policy.Callbacks->isScopeVisible(DC))
+    return;
+
+  if (const auto *NS = dyn_cast<NamespaceDecl>(DC)) {
+    if (Policy.SuppressUnwrittenScope && NS->isAnonymousNamespace())
+      return AppendScope(DC->getParent(), OS, NameInScope);
+
+    if (Policy.SuppressInlineNamespace && NS->isInline() && NameInScope &&
+        DC->getParent()->lookup(NameInScope).size() ==
+            DC->lookup(NameInScope).size())
+      return AppendScope(DC->getParent(), OS, NameInScope);
+
+    AppendScope(DC->getParent(), OS, NS->getDeclName());
+    if (NS->getIdentifier())
+      OS << NS->getName() << "::";
+    else if (Policy.PrintingHelper != nullptr) {
+      Policy.PrintingHelper(DC, OS);
+      OS << "::";
+    } else
+      OS << "(anonymous namespace)::";
+  } else if (const auto *Spec = dyn_cast<ClassTemplateSpecializationDecl>(DC)) {
+    AppendScope(DC->getParent(), OS, Spec->getDeclName());
+    IncludeStrongLifetimeRAII Strong(Policy);
+    OS << Spec->getIdentifier()->getName();
+    const TemplateArgumentList &TemplateArgs = Spec->getTemplateArgs();
+    printTemplateArgumentList(
+        OS, TemplateArgs.asArray(), Policy,
+        Spec->getSpecializedTemplate()->getTemplateParameters());
+    OS << "::";
+  } else if (const auto *Tag = dyn_cast<TagDecl>(DC)) {
+    AppendScope(DC->getParent(), OS, Tag->getDeclName());
+    if (Tag->getIdentifier())
+      OS << Tag->getIdentifier()->getName() << "::";
+    else if (Policy.PrintingHelper != nullptr) {
+      Policy.PrintingHelper(DC, OS);
+      OS << "::";
+    } else if (TypedefNameDecl *Typedef = Tag->getTypedefNameForAnonDecl())
+      OS << Typedef->getIdentifier()->getName() << "::";
+    else
+      return;
+  } else if (DC->isTranslationUnit()) {
+    if (Policy.PrintingHelper != nullptr)
+      Policy.PrintingHelper(DC, OS);
+  } else {
+    AppendScope(DC->getParent(), OS, NameInScope);
+  }
+}
+// <-------------------------------
 
 //===----------------------------------------------------------------------===//
 // Stmt method implementations

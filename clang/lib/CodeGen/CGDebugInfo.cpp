@@ -3924,12 +3924,11 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
 
   // MODIFIED: BAE@CODEMIND -------->
   if (CGM.getLangOpts().CoyoteDbgSymbol) {
-    if (auto fd = dyn_cast_or_null<FunctionDecl>(D)) {
+    if (auto FD = dyn_cast_or_null<FunctionDecl>(D)) {
       // 생성자, 소멸자를 제외한 Method의 경우 중복 데이터 방지를 위해 Cache 체크를 진행
-      auto FI = SPCache.find(fd->getCanonicalDecl());
-      bool IsCtorOrDtor = isa<CXXConstructorDecl>(fd) || isa<CXXDestructorDecl>(fd);
-      if (IsCtorOrDtor || FI == SPCache.end())
-        addProtoFunction(Name, LinkageName, fd);
+      auto FI = SPCache.find(FD->getCanonicalDecl());
+      if (isa<CXXConstructorDecl, CXXDestructorDecl>(FD) || FI == SPCache.end())
+        addProtoFunction(Name, LinkageName, FD);
     }
   }
   // <-------------------------------
@@ -5084,7 +5083,8 @@ llvm::DINode::DIFlags CGDebugInfo::getCallSiteRelatedAttrs() const {
 
 // MODIFIED: BAE@CODEMIND -------->
 void CGDebugInfo::finalizeProto() {
-  analysisCondition();
+  makeDecision();
+  makeTernary();
   if (protoFile.get() != nullptr) {
     auto &FrontendOpts = CGM.getFrontendOpts();
     auto fname = codemind_utils::changeFileExtension(FrontendOpts.OutputFile, "linkage");
@@ -5101,87 +5101,156 @@ highlander::proto::emit::EmitOut &CGDebugInfo::getProtoFile() {
 
 size_t CGDebugInfo::getUniqueID(std::string key) {
   static std::map<std::string, size_t> ids;
-  if (ids.find(key) == ids.end()) {
-    auto id = ids.size();
-    ids[key] = id + 1;
-  }
-  return ids[key];
+  if (key.empty())
+    return 0;
+  auto it = ids.insert({key, 0});
+  if (it.second)
+    it.first->second = ids.size();
+  return it.first->second;
 }
 
-size_t CGDebugInfo::getUniqueID(const Expr *expr, std::string sym_name) {
-  return sym_name.empty() ? 0 : getUniqueID(std::to_string((long long)expr) + sym_name);
+size_t CGDebugInfo::getUniqueID(const Expr *expr, std::string tag) {
+  return expr == nullptr ? 0 : getUniqueID(std::to_string((long long)expr) + tag);
 }
 
-void CGDebugInfo::analysisCondition() {
-  for (auto element : cond) {
-    size_t rid = 0;
-    auto expr = element.first;
-    auto decision = element.second;
-    auto tid = getUniqueID(expr, std::get<0>(decision));
-    auto fid = getUniqueID(expr, std::get<1>(decision));
-    if (analysisCondition(expr, tid, fid, rid) != 0) {
-      addProtoCondNode(expr, std::get<0>(decision), 0, 0);
-      addProtoCondNode(expr, std::get<1>(decision), 0, 0);
-      addProtoCondInfo(addProtoFile(expr->getBeginLoc()), rid, tid, fid);
+void CGDebugInfo::makeTernary() {
+  for (auto trace : traceTernary) {
+    auto tid = getUniqueID(trace.true_symbol);
+    auto fid = getUniqueID(trace.false_symbol);
+    if (size_t rid = analysisCondition(trace.expr, tid, fid)) {
+      addProtoTernary(trace.expr, rid, tid, fid);
+      addProtoCondition(trace.true_symbol, nullptr, 0, 0);
+      addProtoCondition(trace.false_symbol, nullptr, 0, 0);
     }
   }
 }
 
-size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid, size_t &rid) {
+void CGDebugInfo::makeDecision() {
+  for (auto trace : traceDecision) {
+    auto tid = getUniqueID(trace.true_symbol);
+    auto fid = getUniqueID(trace.false_symbol);
+    if (size_t rid = analysisCondition(trace.expr, tid, fid)) {
+      addProtoDecision(trace.expr, rid, tid, fid);
+      addProtoCondition(trace.true_symbol, nullptr, 0, 0);
+      addProtoCondition(trace.false_symbol, nullptr, 0, 0);
+    }
+  }
+}
+
+size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid) {
   // 1. 좌측 값에 의해 최적화가 발생하므로 우측부터 데이터 흐름을 작성
-  // 2. 해당 조건의 sym_name 없을 경우 compile time evaluate가 된 것으로 판단(and:true, or:false)
-  // 3. not의 경우 true id와 false id를 바꿔서 진행
-  // 4. Expr의 Evaluate를 하나의 EvalResult로 연속적인 연산은 SideEffect가 발생함
+  // 2. Expr의 Evaluate를 하나의 EvalResult로 연속적인 연산은 SideEffect가 발생함
   //    (각각의 EvalResult를 사용 or SideEffect의 설정이 필요)
-  // 5. if문과 반복문의 일부 llvm code block 형식이 다름
+  // 3. if문과 반복문의 일부 llvm code block 형식이 다름
   //   예) !Variable 같은 간단한 연산으로 구성된 경우
   //       if는 간단한 연산도 각각의 llvm code block으로 구성
   //       반복문은 하나의 llvm code block으로 구성
-  size_t dummy, result = 0;
-  expr = expr->IgnoreParens();
-  if (auto op = dyn_cast<BinaryOperator>(expr)) {
-    Expr::EvalResult lhs, rhs;
-    if (op->getOpcode() == BO_LAnd) {
-      if (!op->getLHS()->EvaluateAsInt(lhs, CGM.getContext())) {
-        if (!op->getRHS()->EvaluateAsInt(rhs, CGM.getContext()))
-          tid = analysisCondition(op->getRHS(), tid, fid, dummy);
-        else if (!rhs.Val.getInt().getBoolValue())
-          return 0;
-        return analysisCondition(op->getLHS(), tid, fid, rid);
-      } else if (lhs.Val.getInt().getBoolValue()) {
-        if (!op->getRHS()->EvaluateAsInt(rhs, CGM.getContext()))
-          return analysisCondition(op->getRHS(), tid, fid, rid);
-      }
-      return 0;
-    } else if (op->getOpcode() == BO_LOr) {
-      if (!op->getLHS()->EvaluateAsInt(lhs, CGM.getContext())) {
-        if (!op->getRHS()->EvaluateAsInt(rhs, CGM.getContext()))
-          fid = analysisCondition(op->getRHS(), tid, fid, dummy);
-        else if (rhs.Val.getInt().getBoolValue())
-          return 0;
-        return analysisCondition(op->getLHS(), tid, fid, rid);
-      } else if (!lhs.Val.getInt().getBoolValue()) {
-        if (!op->getRHS()->EvaluateAsInt(rhs, CGM.getContext()))
-          return analysisCondition(op->getRHS(), tid, fid, rid);
-      }
-      return 0;
-    }
-  } else if (auto op = dyn_cast<UnaryOperator>(expr)) {
-    if (op->getOpcode() == clang::UnaryOperatorKind::UO_LNot) {
-      if ((result = analysisCondition(op->getSubExpr(), fid, tid, rid)))
-        return result;
-    }
-  } else if (auto op = dyn_cast<ConditionalOperator>(expr)) {
-    auto ctid = analysisCondition(op->getLHS(), tid, fid, dummy);
-    auto cfid = analysisCondition(op->getRHS(), tid, fid, dummy);
-    return analysisCondition(op->getCond(), ctid, cfid, rid);
+  // 4. 3항 연산자는 compile time 계산 가능 여부에 따라 llvm code가 바뀜
+  //   예) condition
+  //       compile time에 결정된 condition의 결과에 따라
+  //       연산식(LHS, RHS 중 하나)의 결과 값을 store하는 동작으로 변경
+  //       그러므로 Branch, MC/DC의 대상이 아님
+  //   예) LHS, RHS
+  //       compile time에 각 식(LHS, RHS)을 계산하고
+  //       run time에 condition에 따라 select에 의해 결정되는 동작으로 간소화될 수 있음
+  bool eval = false;
+  expr = expr->IgnoreParenCasts();
+  llvm::Optional<size_t> flow_id;
+  std::string symbol = traceSymbol[expr];
+  size_t cid = addProtoCondition(symbol, expr, 0, 0);
+  const bool isLeaf = cid > 0 && (cid == tid || cid == fid);
+  if (auto bo = dyn_cast_or_null<BinaryOperator>(expr)) {
+    if (bo->getOpcode() == BO_LAnd)
+      flow_id = analysisBinLAnd(bo, tid, fid);
+    else if (bo->getOpcode() == BO_LOr)
+      flow_id = analysisBinLOr(bo, tid, fid);
+  } else if (auto uo = dyn_cast<UnaryOperator>(expr)) {
+    if (uo->getOpcode() == UO_LNot)
+      flow_id = analysisUnaryLNot(uo, tid, fid);
   }
-  auto it = syms.find(expr);
-  if (it != syms.end()) {
-    result = addProtoCondNode(expr, it->second, tid, fid);
-    rid = rid == 0 ? result : rid;
+
+  if (!isLeaf) {
+    if (expr->EvaluateAsBooleanCondition(eval, CGM.getContext()))
+      flow_id = eval ? tid : fid;
+    else if (auto co = dyn_cast<ConditionalOperator>(expr))
+      flow_id = analysisConditional(co, tid, fid);
+
+    if (flow_id.hasValue())
+      tid = fid = flow_id.getValue();
+    addProtoCondition(symbol, expr, tid, fid);
   }
-  return result;
+
+  return cid <= 0 || (isLeaf && flow_id.hasValue()) ? flow_id.getValue() : cid;
+}
+
+size_t CGDebugInfo::analysisBinLAnd(const BinaryOperator *bo, size_t tid, size_t fid) {
+  auto lhsExpr = bo->getLHS();
+  auto rhsExpr = bo->getRHS();
+  Expr::EvalResult lhsEval, rhsEval;
+  if (!lhsExpr->EvaluateAsInt(lhsEval, CGM.getContext())) {
+    if (!rhsExpr->EvaluateAsInt(rhsEval, CGM.getContext())) {
+      tid = analysisCondition(rhsExpr, tid, fid);
+      return analysisCondition(lhsExpr, tid, fid);
+    } else if (rhsEval.Val.getInt().getBoolValue())
+      return analysisCondition(lhsExpr, tid, fid);
+  } else if (lhsEval.Val.getInt().getBoolValue()) {
+    if (!rhsExpr->EvaluateAsInt(rhsEval, CGM.getContext()))
+      return analysisCondition(rhsExpr, tid, fid);
+    else if (rhsEval.Val.getInt().getBoolValue())
+      return tid;
+  }
+  return fid;
+}
+
+size_t CGDebugInfo::analysisBinLOr(const BinaryOperator *bo, size_t tid, size_t fid) {
+  auto lhsExpr = bo->getLHS();
+  auto rhsExpr = bo->getRHS();
+  Expr::EvalResult lhsEval, rhsEval;
+  if (!lhsExpr->EvaluateAsInt(lhsEval, CGM.getContext())) {
+    if (!rhsExpr->EvaluateAsInt(rhsEval, CGM.getContext())) {
+      fid = analysisCondition(rhsExpr, tid, fid);
+      return analysisCondition(lhsExpr, tid, fid);
+    } else if (!rhsEval.Val.getInt().getBoolValue())
+      return analysisCondition(lhsExpr, tid, fid);
+  } else if (!lhsEval.Val.getInt().getBoolValue()) {
+    if (!rhsExpr->EvaluateAsInt(rhsEval, CGM.getContext()))
+      return analysisCondition(rhsExpr, tid, fid);
+    else if (!rhsEval.Val.getInt().getBoolValue())
+      return fid;
+  }
+  return tid;
+}
+
+size_t CGDebugInfo::analysisUnaryLNot(const UnaryOperator *uo, size_t tid, size_t fid) {
+  return analysisCondition(uo->getSubExpr(), fid, tid);
+}
+
+size_t CGDebugInfo::analysisConditional(const ConditionalOperator *co, size_t tid, size_t fid) {
+  auto lhsExpr = co->getLHS();
+  auto rhsExpr = co->getRHS();
+  auto lhsId = analysisCondition(lhsExpr, tid, fid);
+  auto rhsId = analysisCondition(rhsExpr, tid, fid);
+  if (lhsId == 0 && rhsId == 0 && (tid > 0 || fid > 0)) {
+    bool lhsBool, rhsBool;
+    if (lhsExpr->EvaluateAsBooleanCondition(lhsBool, CGM.getContext()) &&
+        rhsExpr->EvaluateAsBooleanCondition(rhsBool, CGM.getContext())) {
+      lhsId = lhsBool ? tid : fid;
+      rhsId = rhsBool ? tid : fid;
+    }
+  }
+
+  return analysisCondition(co->getCond(), lhsId, rhsId);
+}
+
+llvm::DIFile *CGDebugInfo::getFileNode(SourceLocation loc) {
+  auto debug = SourceLocToDebugLoc(loc).get();
+  return (debug == nullptr) ? nullptr : debug->getFile();
+}
+
+std::string CGDebugInfo::getTraceLineMark(SourceLocation loc) {
+  auto line = getLineNumber(loc);
+  auto column = getColumnNumber(loc, true);
+  return std::to_string(line) + "-" + std::to_string(column);
 }
 
 void CGDebugInfo::addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout) {
@@ -5232,47 +5301,73 @@ size_t CGDebugInfo::addProtoFile(SourceLocation loc) {
   return result;
 }
 
-size_t CGDebugInfo::addProtoCondNode(const Expr *expr, std::string sym_name, size_t tid, size_t fid) {
-  using namespace highlander::proto::emit;
-  if (sym_name.empty())
+size_t CGDebugInfo::addProtoExpr(const Expr *expr) {
+  if (expr == nullptr)
     return 0;
-  auto &ASTContext = CGM.getContext();
-  auto &SourceMgr = ASTContext.getSourceManager();
-  auto &LangOpts = ASTContext.getLangOpts();
-  auto result = getUniqueID(expr, sym_name);
-  auto range = Lexer::makeFileCharRange(CharSourceRange::getTokenRange(expr->getSourceRange()), SourceMgr, LangOpts);
-  auto sploc = SourceMgr.getPresumedLoc(range.getBegin());
-  auto eploc = SourceMgr.getPresumedLoc(range.getEnd());
-  auto text = Lexer::getSourceText(range, SourceMgr, LangOpts).str();
-  auto &node = (*getProtoFile().mutable_conditions())[result];
-  text = std::regex_replace(text, std::regex(R"(\\\n)"), "\\n");
-  text = std::regex_replace(text, std::regex(R"(\n)"), "");
-  node.set_sym_name(sym_name);
-  node.set_expr(text);
-  node.set_sline(sploc.getLine());
-  node.set_scol(sploc.getColumn());
-  node.set_eline(eploc.getLine());
-  node.set_ecol(eploc.getColumn());
-  node.set_true_id(tid);
-  node.set_false_id(fid);
+  auto result = getUniqueID(expr, ".Expr");
+  auto exprs = getProtoFile().mutable_exprs();
+  if (exprs->find(result) == exprs->end()) {
+    auto &node = (*exprs)[result];
+    auto &ASTContext = CGM.getContext();
+    auto &SourceMgr = ASTContext.getSourceManager();
+    auto &LangOpts = ASTContext.getLangOpts();
+    auto range = CharSourceRange::getTokenRange(expr->getSourceRange());
+    range = Lexer::makeFileCharRange(range, SourceMgr, LangOpts);
+    auto text = Lexer::getSourceText(range, SourceMgr, LangOpts).str();
+    text = std::regex_replace(text, std::regex(R"(\\\n)"), "\\n");
+    text = std::regex_replace(text, std::regex(R"(\n)"), "");
+    node.set_expr(text);
+    node.set_sline(getLineNumber(range.getBegin()));
+    node.set_scol(getColumnNumber(range.getBegin(), true));
+    node.set_eline(getLineNumber(range.getEnd()));
+    node.set_ecol(getColumnNumber(range.getEnd(), true));
+  }
   return result;
 }
 
-void CGDebugInfo::addProtoCondInfo(size_t file, size_t rid, size_t tid, size_t fid) {
-  auto info = getProtoFile().add_decisions();
-  info->set_file_id(file);
+size_t CGDebugInfo::addProtoCondition(std::string symbol, const Expr *expr, size_t tid, size_t fid) {
+  if (symbol.empty())
+    return 0;
+  auto result = getUniqueID(symbol);
+  auto conditions = getProtoFile().mutable_conditions();
+  auto &node = (*conditions)[result];
+  node.set_sym_name(symbol);
+  node.set_expr_id(expr != nullptr ? addProtoExpr(expr) : node.expr_id());
+  node.set_true_id(tid != 0 ? tid : node.true_id());
+  node.set_false_id(fid != 0 ? fid : node.false_id());
+  return result;
+}
+
+void CGDebugInfo::addProtoTernary(const Expr *expr, size_t rid, size_t tid, size_t fid) {
+  auto info = getProtoFile().add_ternaries();
+  info->set_file_id(addProtoFile(expr->getBeginLoc()));
+  info->set_expr_id(addProtoExpr(expr));
   info->set_root_id(rid);
   info->set_true_id(tid);
   info->set_false_id(fid);
 }
 
-void CGDebugInfo::addDecisionTrace(const Expr *expr, std::string ttsym_name, std::string ftsym_name) {
-  if (expr != nullptr)
-    cond[expr] = std::make_tuple(ttsym_name, ftsym_name);
+void CGDebugInfo::addProtoDecision(const Expr *expr, size_t rid, size_t tid, size_t fid) {
+  auto info = getProtoFile().add_decisions();
+  info->set_file_id(addProtoFile(expr->getBeginLoc()));
+  info->set_expr_id(addProtoExpr(expr));
+  info->set_root_id(rid);
+  info->set_true_id(tid);
+  info->set_false_id(fid);
 }
 
-void CGDebugInfo::addConditionTrace(const Expr *expr, std::string sym_name) {
-  if (expr != nullptr)
-    syms[expr] = sym_name;
+void CGDebugInfo::addConditionTrace(const Expr *expr, std::string symbol) {
+  expr = expr->IgnoreParenCasts();
+  traceSymbol[expr] = symbol;
+}
+
+void CGDebugInfo::addTernaryTrace(const Expr *expr, std::string true_symbol, std::string false_symbol) {
+  expr = expr->IgnoreParenCasts();
+  traceTernary.push_back({expr, true_symbol, false_symbol});
+}
+
+void CGDebugInfo::addDecisionTrace(const Expr *expr, std::string true_symbol, std::string false_symbol) {
+  expr = expr->IgnoreParenCasts();
+  traceDecision.push_back({expr, true_symbol, false_symbol});
 }
 // <-------------------------------

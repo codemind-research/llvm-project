@@ -39,8 +39,6 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Transforms/Utils/SanitizerStats.h"
 
-#include <string>
-
 using namespace clang;
 using namespace CodeGen;
 
@@ -215,9 +213,13 @@ void CodeGenFunction::EmitIgnoredExpr(const Expr *E) {
 RValue CodeGenFunction::EmitAnyExpr(const Expr *E,
                                     AggValueSlot aggSlot,
                                     bool ignoreResult) {
+  // MODIFIED: BAE@CODEMIND -------->
+  std::string linemark = "";
+  if (auto DI = getDebugInfo())
+    linemark = DI->getTraceLineMark(E->getBeginLoc());
   switch (getEvaluationKind(E->getType())) {
   case TEK_Scalar:
-    return RValue::get(EmitScalarExpr(E, ignoreResult));
+    return RValue::get(EmitScalarExpr(E, ignoreResult, "coyote.any." + linemark + ".scalar"));
   case TEK_Complex:
     return RValue::getComplex(EmitComplexExpr(E, ignoreResult, ignoreResult));
   case TEK_Aggregate:
@@ -226,6 +228,7 @@ RValue CodeGenFunction::EmitAnyExpr(const Expr *E,
     EmitAggExpr(E, aggSlot);
     return aggSlot.asRValue();
   }
+  // <-------------------------------
   llvm_unreachable("bad evaluation kind");
 }
 
