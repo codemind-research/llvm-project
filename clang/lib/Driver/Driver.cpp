@@ -4724,10 +4724,13 @@ const char *Driver::GetNamedOutputPath(Compilation &C, const JobAction &JA,
         &JA);
   }
 
+  // MODIFIED: BAE@CODEMIND -------->
   // Default to writing to stdout?
-  if (AtTopLevel && !CCGenDiagnostics && HasPreprocessOutput(JA)) {
-    return "-";
+  if (AtTopLevel && !CCGenDiagnostics) {
+    if (HasPreprocessOutput(JA) || C.getArgs().hasArg(options::OPT_to_stdout))
+      return "-";
   }
+  // <-------------------------------
 
   // Is this the assembly listing for /FA?
   if (JA.getType() == types::TY_PP_Asm &&

@@ -278,29 +278,9 @@ TypeEvaluationKind CodeGenFunction::getEvaluationKind(QualType type) {
     llvm_unreachable("unknown type kind!");
   }
 }
+
 // MODIFIED: BAE@CODEMIND -------->
-llvm::DebugLoc CodeGenFunction::EmitReturnBlock(SmallVectorImpl<unsigned> &Backup) {
-  auto BackupProc = [&](const llvm::BasicBlock *B){ 
-    if (B == nullptr)
-      return;
-    unsigned int DbgID = getLLVMContext().getMDKindID("dbg");
-    SmallVector<StringRef, 4> Names;
-    SmallVector<std::pair<unsigned, llvm::MDNode *>, 4> Temp;
-    getLLVMContext().getMDKindNames(Names);
-    for (auto &I : *B) {
-      I.getAllMetadata(Temp);
-      auto DbgNode = I.getMetadata(llvm::LLVMContext::MD_dbg);
-      for (auto Meta : Temp) {
-        if (Meta.first != DbgID) {
-          auto name = Names[Meta.first].str();
-          if (Meta.second == DbgNode)
-            Backup.push_back(Meta.first);
-          else if (name.find("coyote") != std::string::npos)
-            Backup.push_back(Meta.first);
-        }
-      }
-    }
-  };
+llvm::DebugLoc CodeGenFunction::EmitReturnBlock(SmallVector<std::pair<unsigned, llvm::MDNode *>> &Backup) {
 // <-------------------------------
 
   // For cleanliness, we try to avoid emitting the return block for
@@ -332,9 +312,14 @@ llvm::DebugLoc CodeGenFunction::EmitReturnBlock(SmallVectorImpl<unsigned> &Backu
       // Record/return the DebugLoc of the simple 'return' expression to be used
       // later by the actual 'ret' instruction.
       llvm::DebugLoc Loc = BI->getDebugLoc();
-      Builder.SetInsertPoint(BI->getParent());
       // MODIFIED: BAE@CODEMIND -------->
-      BackupProc(BI->getParent());
+      auto BB = BI->getParent();
+      Builder.SetInsertPoint(BB);
+      for (auto &I : *BB) {
+        SmallVector<std::pair<unsigned, llvm::MDNode *>> MDs;
+        I.getAllMetadata(MDs);
+        Backup.insert(Backup.end(), MDs.begin(), MDs.end());
+      }
       // <-------------------------------
       BI->eraseFromParent();
       delete ReturnBlock.getBlock();
@@ -410,7 +395,7 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
 
   // Emit function epilog (to return).
   // MODIFIED: BAE@CODEMIND -------->
-  SmallVector<unsigned, 4> Backup;
+  SmallVector<std::pair<unsigned, llvm::MDNode *>> Backup;
   llvm::DebugLoc Loc = EmitReturnBlock(Backup);
   // <-------------------------------
 
@@ -535,7 +520,17 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
   if (ReturnValue.isValid()) {
     auto *RetAlloca = dyn_cast<llvm::AllocaInst>(ReturnValue.getPointer());
     if (RetAlloca && RetAlloca->use_empty()) {
-      RetAlloca->eraseFromParent();
+      // MODIFIED: BAE@CODEMIND -------->
+      if (auto DI = getDebugInfo()) {
+        SmallVector<std::pair<unsigned, llvm::MDNode *>> MDs;
+        RetAlloca->getAllMetadata(MDs);
+        auto BB = RetAlloca->getParent();
+        auto Any = RetAlloca->eraseFromParent();
+        if (Any != BB->end())
+          DI->restoreMetaData(*Any, MDs);
+      } else
+        RetAlloca->eraseFromParent();
+      // <-------------------------------
       ReturnValue = Address::invalid();
     }
   }
@@ -1212,6 +1207,17 @@ void CodeGenFunction::EmitFunctionBody(const Stmt *Body) {
   if (CPlusPlusWithProgress())
     FnIsMustProgress = true;
 
+  // MODIFIED: BAE@CODEMIND -------->
+  if (CGM.getLangOpts().CoyoteClang) {
+    // COYOTE의 기본 생성자 호출 회피를 지원하기 위해 virtual table만 생성
+    // 참고: clang/lib/CodeGen/CGClass.cpp - EmitConstructorBody
+    if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(CurGD.getDecl())) {
+      if (MD->getNameAsString() == "__COYOTE_VTAB_INIT")
+        InitializeVTablePointers(MD->getParent());
+    }
+  }
+  // <-------------------------------
+
   if (const CompoundStmt *S = dyn_cast<CompoundStmt>(Body))
     EmitCompoundStmtWithoutScope(*S);
   else
@@ -1639,7 +1645,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
   // MODIFIED: RHO@CODEMIND -------->
   llvm::MDNode *MD = nullptr;
   if (auto DI = getDebugInfo())
-    MD = DI->getFileNode(Cond->getBeginLoc());
+    MD = DI->getDIScope(Cond->getBeginLoc());
   // <-------------------------------
 
   Cond = Cond->IgnoreParens();
@@ -1809,6 +1815,7 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
     // true and false branches. This matches the behavior of __builtin_expect.
     ConditionalEvaluation cond(*this);
     // MODIFIED: RHO@CODEMIND -------->
+    auto CondBlock = Builder.GetInsertBlock();
     EmitBranchOnBoolExpr(CondOp->getCond(), LHSBlock, RHSBlock,
                          getProfileCount(CondOp),
                          trace.empty() ? trace : trace + ".tcond1",
@@ -1851,6 +1858,8 @@ void CodeGenFunction::EmitBranchOnBoolExpr(const Expr *Cond,
 
     // MODIFIED: BAE@CODEMIND -------->
     if (getLangOpts().CoyoteDbgSymbol && !trace.empty()) {
+      if (auto first = CondBlock->getFirstNonPHI())
+        first->setMetadata(trace.c_str(), MD);
       if (auto DI = getDebugInfo()) {
         DI->addConditionTrace(CondOp, trace.c_str());
         DI->addTernaryTrace(CondOp, ltrace.c_str(), rtrace.c_str());

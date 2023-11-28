@@ -3265,14 +3265,7 @@ llvm::Value *CodeGenFunction::EmitCMSEClearRecord(llvm::Value *Src,
 void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
                                          bool EmitRetDbgLoc,
                                          SourceLocation EndLoc,
-                                         SmallVectorImpl<unsigned> &Backup) {
-  auto RestoreProc = [&](llvm::Instruction *I) {
-    if (I == nullptr)
-      return;
-    auto DbgNode = I->getMetadata(llvm::LLVMContext::MD_dbg);
-    for (auto Kind : Backup)
-      I->setMetadata(Kind, DbgNode);
-  };
+                                         SmallVector<std::pair<unsigned, llvm::MDNode *>> &Backup) {
 // <-------------------------------
 
   if (FI.isNoReturn()) {
@@ -3285,7 +3278,11 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
     // Naked functions don't have epilogues.
     // MODIFIED: BAE@CODEMIND -------->
     llvm::Instruction *Ret = Builder.CreateUnreachable();
-    RestoreProc(Ret);
+    if (auto DI = getDebugInfo()) {
+      DI->restoreMetaData(*Ret, Backup);
+      if (!Ret->getDebugLoc())
+        Ret->setDebugLoc(SourceLocToDebugLoc(EndLoc));
+    }
     // <-------------------------------
     return;
   }
@@ -3294,7 +3291,11 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
   if (!ReturnValue.isValid()) {
     // MODIFIED: BAE@CODEMIND -------->
     llvm::Instruction *Ret = Builder.CreateRetVoid();
-    RestoreProc(Ret);
+    if (auto DI = getDebugInfo()) {
+      DI->restoreMetaData(*Ret, Backup);
+      if (!Ret->getDebugLoc())
+        Ret->setDebugLoc(SourceLocToDebugLoc(EndLoc));
+    }
     // <-------------------------------
     return;
   }
@@ -3458,7 +3459,11 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
     Ret = Builder.CreateRetVoid();
   }
   // MODIFIED: BAE@CODEMIND -------->
-  RestoreProc(Ret);
+  if (auto DI = getDebugInfo()) {
+    DI->restoreMetaData(*Ret, Backup);
+    if (!Ret->getDebugLoc())
+      Ret->setDebugLoc(SourceLocToDebugLoc(EndLoc));
+  }
   // <-------------------------------
 
   if (RetDbgLoc)

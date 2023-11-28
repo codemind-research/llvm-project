@@ -779,7 +779,7 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   if (getLangOpts().CoyoteDbgSymbol) {
     llvm::MDNode *MD = nullptr;
     if (auto DI = getDebugInfo())
-      MD = DI->getFileNode(S.getBeginLoc());
+      MD = DI->getDIScope(S.getBeginLoc());
     ThenBlock->front().setMetadata("coyote.then." + linemark, MD);
     if(!ElseBlock->empty())
       ElseBlock->front().setMetadata("coyote.else." + linemark, MD);
@@ -799,7 +799,7 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   llvm::MDNode *MD = nullptr;
   std::string linemark = "";
   if (auto DI = getDebugInfo()) {
-    MD = DI->getFileNode(S.getBeginLoc());
+    MD = DI->getDIScope(S.getBeginLoc());
     linemark = DI->getTraceLineMark(S.getBeginLoc());
   }
   // <-------------------------------
@@ -934,7 +934,7 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
   llvm::MDNode *MD = nullptr;
   std::string linemark = "";
   if (auto DI = getDebugInfo()) {
-    MD = DI->getFileNode(S.getBeginLoc());
+    MD = DI->getDIScope(S.getBeginLoc());
     linemark = DI->getTraceLineMark(S.getBeginLoc());
   }
   // <-------------------------------
@@ -1032,7 +1032,7 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
   llvm::MDNode *MD = nullptr;
   std::string linemark = "";
   if (auto DI = getDebugInfo()) {
-    MD = DI->getFileNode(S.getBeginLoc());
+    MD = DI->getDIScope(S.getBeginLoc());
     linemark = DI->getTraceLineMark(S.getBeginLoc());
   }
   // <-------------------------------
@@ -1177,7 +1177,7 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
   llvm::MDNode *MD = nullptr;
   std::string linemark = "";
   if (auto DI = getDebugInfo()) {
-    MD = DI->getFileNode(S.getBeginLoc());
+    MD = DI->getDIScope(S.getBeginLoc());
     linemark = DI->getTraceLineMark(S.getBeginLoc());
   }
   // <-------------------------------
@@ -2006,8 +2006,10 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
          Case;
          Case = Case->getNextSwitchCase()) {
       if (isa<DefaultStmt>(Case)) {
-        auto SwitchMeta = SwitchInsn->getMetadata(llvm::LLVMContext::MD_dbg);
-        SwitchInsn->setMetadata("coyote.has_default", SwitchMeta);
+        llvm::MDNode *MD = nullptr;
+        if (auto DI = getDebugInfo())
+          MD = DI->getDIScope(Case->getBeginLoc());
+        SwitchInsn->setMetadata("coyote.has_default", MD);
         break;
       }
     }

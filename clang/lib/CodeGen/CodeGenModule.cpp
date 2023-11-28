@@ -4723,12 +4723,11 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
     // MODIFIED: BAE@CODEMIND -------->
     {
       // Copy MetaData without dbg
-      SmallVector<std::pair<unsigned, llvm::MDNode *>, 4> Temp;
-      unsigned int DbgID = newFn->getContext().getMDKindID("dbg");
-      callSite->getAllMetadata(Temp);
-      for (auto Meta : Temp) {
-        if (Meta.first != DbgID)
-          newCall->setMetadata(Meta.first, Meta.second);
+      SmallVector<std::pair<unsigned, llvm::MDNode *>> vector;
+      callSite->getAllMetadata(vector);
+      for (auto it : vector) {
+        if (it.first != llvm::LLVMContext::MD_dbg)
+          newCall->setMetadata(it.first, it.second);
       }
     }
     // <-------------------------------

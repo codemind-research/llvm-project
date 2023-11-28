@@ -10,13 +10,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// MODIFIED: BAE@CODEMIND -------->
-#include "clang/Lex/Lexer.h"
-#include <fstream>
-#include <regex>
-#include "../../plugin/SrcInfo/CodemindUtils.h"
-// <-------------------------------
-
 #include "CGDebugInfo.h"
 #include "CGBlocks.h"
 #include "CGCXXABI.h"
@@ -54,6 +47,12 @@
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/TimeProfiler.h"
+// MODIFIED: BAE@CODEMIND -------->
+#include "clang/Lex/Lexer.h"
+#include <fstream>
+#include <regex>
+#include "../../plugin/SrcInfo/CodemindUtils.h"
+// <-------------------------------
 using namespace clang;
 using namespace clang::CodeGen;
 
@@ -5184,38 +5183,38 @@ size_t CGDebugInfo::analysisCondition(const Expr *expr, size_t tid, size_t fid) 
 }
 
 size_t CGDebugInfo::analysisBinLAnd(const BinaryOperator *bo, size_t tid, size_t fid) {
-  auto lhsExpr = bo->getLHS();
-  auto rhsExpr = bo->getRHS();
-  Expr::EvalResult lhsEval, rhsEval;
-  if (!lhsExpr->EvaluateAsInt(lhsEval, CGM.getContext())) {
-    if (!rhsExpr->EvaluateAsInt(rhsEval, CGM.getContext())) {
-      tid = analysisCondition(rhsExpr, tid, fid);
-      return analysisCondition(lhsExpr, tid, fid);
-    } else if (rhsEval.Val.getInt().getBoolValue())
-      return analysisCondition(lhsExpr, tid, fid);
-  } else if (lhsEval.Val.getInt().getBoolValue()) {
-    if (!rhsExpr->EvaluateAsInt(rhsEval, CGM.getContext()))
-      return analysisCondition(rhsExpr, tid, fid);
-    else if (rhsEval.Val.getInt().getBoolValue())
+  auto le = bo->getLHS();
+  auto re = bo->getRHS();
+  Expr::EvalResult lv, rv;
+  if (!le->isValueDependent() && !le->EvaluateAsInt(lv, CGM.getContext())) {
+    if (!re->isValueDependent() && !re->EvaluateAsInt(rv, CGM.getContext())) {
+      tid = analysisCondition(re, tid, fid);
+      return analysisCondition(le, tid, fid);
+    } else if (rv.Val.getInt().getBoolValue())
+      return analysisCondition(le, tid, fid);
+  } else if (lv.Val.getInt().getBoolValue()) {
+    if (!re->isValueDependent() && !re->EvaluateAsInt(rv, CGM.getContext()))
+      return analysisCondition(re, tid, fid);
+    else if (rv.Val.getInt().getBoolValue())
       return tid;
   }
   return fid;
 }
 
 size_t CGDebugInfo::analysisBinLOr(const BinaryOperator *bo, size_t tid, size_t fid) {
-  auto lhsExpr = bo->getLHS();
-  auto rhsExpr = bo->getRHS();
-  Expr::EvalResult lhsEval, rhsEval;
-  if (!lhsExpr->EvaluateAsInt(lhsEval, CGM.getContext())) {
-    if (!rhsExpr->EvaluateAsInt(rhsEval, CGM.getContext())) {
-      fid = analysisCondition(rhsExpr, tid, fid);
-      return analysisCondition(lhsExpr, tid, fid);
-    } else if (!rhsEval.Val.getInt().getBoolValue())
-      return analysisCondition(lhsExpr, tid, fid);
-  } else if (!lhsEval.Val.getInt().getBoolValue()) {
-    if (!rhsExpr->EvaluateAsInt(rhsEval, CGM.getContext()))
-      return analysisCondition(rhsExpr, tid, fid);
-    else if (!rhsEval.Val.getInt().getBoolValue())
+  auto le = bo->getLHS();
+  auto re = bo->getRHS();
+  Expr::EvalResult lv, rv;
+  if (!le->isValueDependent() && !le->EvaluateAsInt(lv, CGM.getContext())) {
+    if (!re->isValueDependent() && !re->EvaluateAsInt(rv, CGM.getContext())) {
+      fid = analysisCondition(re, tid, fid);
+      return analysisCondition(le, tid, fid);
+    } else if (!rv.Val.getInt().getBoolValue())
+      return analysisCondition(le, tid, fid);
+  } else if (!lv.Val.getInt().getBoolValue()) {
+    if (!re->isValueDependent() && !re->EvaluateAsInt(rv, CGM.getContext()))
+      return analysisCondition(re, tid, fid);
+    else if (!rv.Val.getInt().getBoolValue())
       return fid;
   }
   return tid;
@@ -5226,31 +5225,44 @@ size_t CGDebugInfo::analysisUnaryLNot(const UnaryOperator *uo, size_t tid, size_
 }
 
 size_t CGDebugInfo::analysisConditional(const ConditionalOperator *co, size_t tid, size_t fid) {
-  auto lhsExpr = co->getLHS();
-  auto rhsExpr = co->getRHS();
-  auto lhsId = analysisCondition(lhsExpr, tid, fid);
-  auto rhsId = analysisCondition(rhsExpr, tid, fid);
-  if (lhsId == 0 && rhsId == 0 && (tid > 0 || fid > 0)) {
-    bool lhsBool, rhsBool;
-    if (lhsExpr->EvaluateAsBooleanCondition(lhsBool, CGM.getContext()) &&
-        rhsExpr->EvaluateAsBooleanCondition(rhsBool, CGM.getContext())) {
-      lhsId = lhsBool ? tid : fid;
-      rhsId = rhsBool ? tid : fid;
+  auto le = co->getLHS();
+  auto re = co->getRHS();
+  auto lid = analysisCondition(le, tid, fid);
+  auto rid = analysisCondition(re, tid, fid);
+  if (lid == 0 && rid == 0 && (tid > 0 || fid > 0)) {
+    bool lb, rb;
+    if (!le->isValueDependent() && le->EvaluateAsBooleanCondition(lb, CGM.getContext()) &&
+        !re->isValueDependent() && re->EvaluateAsBooleanCondition(rb, CGM.getContext())) {
+      lid = lb ? tid : fid;
+      rid = rb ? tid : fid;
     }
   }
 
-  return analysisCondition(co->getCond(), lhsId, rhsId);
+  return analysisCondition(co->getCond(), lid, rid);
 }
 
-llvm::DIFile *CGDebugInfo::getFileNode(SourceLocation loc) {
+llvm::DIScope *CGDebugInfo::getDIScope(SourceLocation loc) {
   auto debug = SourceLocToDebugLoc(loc).get();
-  return (debug == nullptr) ? nullptr : debug->getFile();
+  return (debug == nullptr) ? nullptr : debug->getScope();
 }
 
 std::string CGDebugInfo::getTraceLineMark(SourceLocation loc) {
   auto line = getLineNumber(loc);
   auto column = getColumnNumber(loc, true);
   return std::to_string(line) + "-" + std::to_string(column);
+}
+
+void CGDebugInfo::restoreMetaData(llvm::Instruction &I, SmallVector<std::pair<unsigned, llvm::MDNode *>> &MDs) {
+  SmallVector<StringRef> Names;
+  CGM.getLLVMContext().getMDKindNames(Names);
+  for (auto MD : MDs) {
+    auto name = Names[MD.first].str();
+    if (MD.first == llvm::LLVMContext::MD_dbg) {
+      if (!I.getDebugLoc())
+        I.setDebugLoc(llvm::DebugLoc(MD.second));
+    } else if (name.find("coyote") != std::string::npos)
+      I.setMetadata(MD.first, MD.second);
+  }
 }
 
 void CGDebugInfo::addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout) {
@@ -5357,6 +5369,13 @@ void CGDebugInfo::addProtoDecision(const Expr *expr, size_t rid, size_t tid, siz
 }
 
 void CGDebugInfo::addConditionTrace(const Expr *expr, std::string symbol) {
+  // 해당 함수를 호출할 경우 대응되는 MetaData가 설정되어야 함
+  //   예) CodeGenFunction에서의 처리(clang/lib/CodeGen/CodeGenFunction.h)
+  //       llvm::BasicBlock *Block = Builder.GetInsertBlock();
+  //       if (auto first = Block->getFirstNonPHI())
+  //         first->setMetadata(symbol.c_str(), MD);
+  //       if (auto DI = getDebugInfo())
+  //         DI->addConditionTrace(expr, symbol);
   expr = expr->IgnoreParenCasts();
   traceSymbol[expr] = symbol;
 }
