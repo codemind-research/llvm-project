@@ -32,12 +32,11 @@
 #include "llvm/Support/Allocator.h"
 // MODIFIED: BAE@CODEMIND -------->
 #include "clang/AST/VTableBuilder.h"
-#include "google/protobuf/message_lite.h"
-#include "emit.pb.h"
-
 #include <map>
 #include <string>
 #include <tuple>
+#include "google/protobuf/message_lite.h"
+#include "emit.pb.h"
 // <-------------------------------
 
 namespace llvm {
@@ -769,8 +768,9 @@ private:
   size_t analysisUnaryLNot(const UnaryOperator *uo, size_t tid, size_t fid);
   size_t analysisConditional(const ConditionalOperator *co, size_t tid, size_t fid);
 public:
-  llvm::DIFile *getFileNode(SourceLocation loc);
+  llvm::DIScope *getDIScope(SourceLocation loc);
   std::string getTraceLineMark(SourceLocation loc);
+  void restoreMetaData(llvm::Instruction &I, SmallVector<std::pair<unsigned, llvm::MDNode *>> &MDs);
   void addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout);
   void addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
   size_t addProtoFile(SourceLocation loc);

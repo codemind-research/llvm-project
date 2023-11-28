@@ -4189,7 +4189,7 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
   llvm::MDNode *MD = nullptr;
   if (auto DI = CGF.getDebugInfo())
-    MD = DI->getFileNode(E->getBeginLoc());
+    MD = DI->getDIScope(E->getBeginLoc());
   // <-------------------------------
   // Perform vector logical and on comparisons with zero vectors.
   if (E->getType()->isVectorType()) {
@@ -4333,7 +4333,7 @@ Value *ScalarExprEmitter::VisitBinLOr(const BinaryOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
   llvm::MDNode *MD = nullptr;
   if (auto DI = CGF.getDebugInfo())
-    MD = DI->getFileNode(E->getBeginLoc());
+    MD = DI->getDIScope(E->getBeginLoc());
   // <-------------------------------
   // Perform vector logical or on comparisons with zero vectors.
   if (E->getType()->isVectorType()) {
@@ -4497,7 +4497,7 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   // MODIFIED: BAE@CODEMIND -------->
   llvm::MDNode *MD = nullptr;
   if (auto DI = CGF.getDebugInfo())
-    MD = DI->getFileNode(E->getBeginLoc());
+    MD = DI->getDIScope(E->getBeginLoc());
   // <-------------------------------
   TestAndClearIgnoreResultAssign();
 
