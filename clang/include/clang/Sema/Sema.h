@@ -12791,6 +12791,14 @@ public:
   bool checkSYCLDeviceFunction(SourceLocation Loc, FunctionDecl *Callee);
 };
 
+// MODIFIED: BAE@CODEMIND -------->
+ActionResult<CXXRecordDecl *>
+getPatternForClassTemplateSpecialization(
+    Sema &S, SourceLocation PointOfInstantiation,
+    ClassTemplateSpecializationDecl *ClassTemplateSpec,
+    TemplateSpecializationKind TSK);
+// <-------------------------------
+
 /// RAII object that enters a new expression evaluation context.
 class EnterExpressionEvaluationContext {
   Sema &Actions;

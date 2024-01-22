@@ -2825,10 +2825,8 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
     // MODIFIED: BAE@CODEMIND -------->
     StringRef MangledName = getMangledName(GD);
     if (getLangOpts().CoyoteDbgSymbol) {
-      if (!isa<CXXConstructorDecl, CXXDestructorDecl>(FD)) {
-        if (auto DI = getModuleDebugInfo())
-          DI->addProtoFunction("", MangledName, FD);
-      }
+      if (auto DI = getModuleDebugInfo())
+        DI->addProtoFunction("", MangledName, FD, true);
     }
     if (!FD->doesThisDeclarationHaveABody()) {
       if (!FD->doesDeclarationForceExternallyVisibleDefinition())
@@ -3042,6 +3040,17 @@ CodeGenModule::isTriviallyRecursive(const FunctionDecl *FD) {
 bool CodeGenModule::shouldEmitFunction(GlobalDecl GD) {
   if (getFunctionLinkage(GD) != llvm::Function::AvailableExternallyLinkage)
     return true;
+
+  // MODIFIED: BAE@CODEMIND -------->
+  if (getLangOpts().CoyoteClang) {
+    // COYOTE의 기본 생성자 호출 회피를 지원하기 위해 예외 처리
+    if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(GD.getDecl())) {
+      if (MD->getNameAsString() == "__COYOTE_VTAB_INIT")
+        return true;
+    }
+  }
+  // <-------------------------------
+
   const auto *F = cast<FunctionDecl>(GD.getDecl());
   if (CodeGenOpts.OptimizationLevel == 0 && !F->hasAttr<AlwaysInlineAttr>())
     return false;
@@ -3593,10 +3602,8 @@ llvm::Constant *CodeGenModule::GetAddrOfFunction(GlobalDecl GD,
   // MODIFIED: BAE@CODEMIND -------->
   if (getLangOpts().CoyoteDbgSymbol) {
     auto FD = cast<FunctionDecl>(GD.getDecl());
-    if (!isa<CXXConstructorDecl, CXXDestructorDecl>(FD)) {
-      if (auto DI = getModuleDebugInfo())
-        DI->addProtoFunction("", MangledName, FD);
-    }
+    if (auto DI = getModuleDebugInfo())
+      DI->addProtoFunction("", MangledName, FD, true);
   }
   // <-------------------------------
   return GetOrCreateLLVMFunction(MangledName, Ty, GD, ForVTable, DontDefer,

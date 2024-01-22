@@ -3040,11 +3040,13 @@ bool Sema::usesPartialOrExplicitSpecialization(
 /// Get the instantiation pattern to use to instantiate the definition of a
 /// given ClassTemplateSpecializationDecl (either the pattern of the primary
 /// template or of a partial specialization).
-static ActionResult<CXXRecordDecl *>
-getPatternForClassTemplateSpecialization(
+// MODIFIED: BAE@CODEMIND -------->
+ActionResult<CXXRecordDecl *>
+clang::getPatternForClassTemplateSpecialization(
     Sema &S, SourceLocation PointOfInstantiation,
     ClassTemplateSpecializationDecl *ClassTemplateSpec,
     TemplateSpecializationKind TSK) {
+// <-------------------------------
   Sema::InstantiatingTemplate Inst(S, PointOfInstantiation, ClassTemplateSpec);
   if (Inst.isInvalid())
     return {/*Invalid=*/true};
