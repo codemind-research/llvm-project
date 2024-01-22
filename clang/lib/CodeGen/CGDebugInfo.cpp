@@ -1618,8 +1618,7 @@ static bool isFunctionLocalClass(const CXXRecordDecl *RD) {
 
 llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
     const CXXMethodDecl *Method, llvm::DIFile *Unit, llvm::DIType *RecordTy) {
-  bool IsCtorOrDtor =
-      isa<CXXConstructorDecl>(Method) || isa<CXXDestructorDecl>(Method);
+  bool IsCtorOrDtor = isa<CXXConstructorDecl, CXXDestructorDecl>(Method);
 
   StringRef MethodName = getFunctionName(Method);
   llvm::DISubroutineType *MethodTy = getOrCreateMethodType(Method, Unit, true);
@@ -1750,9 +1749,10 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
 
   // MODIFIED: BAE@CODEMIND -------->
   if (CGM.getLangOpts().CoyoteDbgSymbol) {
-    // 생성자, 소멸자는 emitFunctionStart에서 처리
-    if (!IsCtorOrDtor)
-      addProtoFunction(MethodName, MethodLinkageName, Method);
+    // Declare만 존재하는 생성자, 소멸자에 대해서 Dummy 처리
+    if (IsCtorOrDtor)
+      MethodLinkageName = CGM.getMangledName(GlobalDecl(Method));
+    addProtoFunction(MethodName, MethodLinkageName, Method, IsCtorOrDtor);
   }
   // <-------------------------------
 
@@ -3927,7 +3927,7 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
       // 생성자, 소멸자를 제외한 Method의 경우 중복 데이터 방지를 위해 Cache 체크를 진행
       auto FI = SPCache.find(FD->getCanonicalDecl());
       if (isa<CXXConstructorDecl, CXXDestructorDecl>(FD) || FI == SPCache.end())
-        addProtoFunction(Name, LinkageName, FD);
+        addProtoFunction(Name, LinkageName, FD, false);
     }
   }
   // <-------------------------------
@@ -5281,13 +5281,15 @@ void CGDebugInfo::addProtoVTable(StringRef tname, StringRef vtname, const VTable
   }
 }
 
-void CGDebugInfo::addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd) {
+void CGDebugInfo::addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd, bool isDummy) {
   auto pInfo = getProtoFile().mutable_funinfos();
   auto subject = LinkageName.empty() ? Name : LinkageName;
   auto annotation = codemind_utils::getAnnotationNameString(nd);
   if (subject.empty() && isa_and_nonnull<FunctionDecl>(nd))
     subject = getFunctionName(dyn_cast<FunctionDecl>(nd));
-  (*pInfo)[annotation] = subject.str();
+  auto it = (*pInfo).insert({annotation, ""});
+  if (it.second || !isDummy)
+    it.first->second = subject.str();
 }
 
 size_t CGDebugInfo::addProtoFile(SourceLocation loc) {

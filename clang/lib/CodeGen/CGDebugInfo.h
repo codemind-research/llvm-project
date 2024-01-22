@@ -772,7 +772,7 @@ public:
   std::string getTraceLineMark(SourceLocation loc);
   void restoreMetaData(llvm::Instruction &I, SmallVector<std::pair<unsigned, llvm::MDNode *>> &MDs);
   void addProtoVTable(StringRef tname, StringRef vtname, const VTableLayout &VTLayout);
-  void addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd);
+  void addProtoFunction(StringRef Name, StringRef LinkageName, const NamedDecl *nd, bool isDummy);
   size_t addProtoFile(SourceLocation loc);
   size_t addProtoExpr(const Expr *expr);
   size_t addProtoCondition(std::string symbol, const Expr *expr, size_t tid, size_t fid);
