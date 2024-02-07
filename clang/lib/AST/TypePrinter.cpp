@@ -478,7 +478,7 @@ void TypePrinter::printMemberPointerBefore(const MemberPointerType *T,
     OS << '(';
   // MODIFIED: BAE@CODEMIND -------->
   else if (!Policy.SuppressScope && Policy.PrintingHelper != nullptr) {
-    if (isa<TypedefType>(T->getPointeeType()))
+    if (isa<TypedefType, RecordType>(T->getPointeeType()))
       OS << '(';
   }
   // <-------------------------------
@@ -500,7 +500,7 @@ void TypePrinter::printMemberPointerAfter(const MemberPointerType *T,
     OS << ')';
   // MODIFIED: BAE@CODEMIND -------->
   else if (!Policy.SuppressScope && Policy.PrintingHelper != nullptr) {
-    if (isa<TypedefType>(T->getPointeeType()))
+    if (isa<TypedefType, RecordType>(T->getPointeeType()))
       OS << ')';
   }
   // <-------------------------------
