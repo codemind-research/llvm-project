@@ -1033,10 +1033,12 @@ void StmtPrinter::VisitDeclRefExpr(DeclRefExpr *Node) {
     Qualifier->print(OS, Policy);
   // MODIFIED: BAE@CODEMIND -------->
   else if (!Policy.SuppressScope && Policy.PrintingHelper != nullptr) {
-    SuppressTranslationUnitRAII raii(Policy);
-    AppendScope(Node->getDecl()->getDeclContext(),
-                OS,
-                Node->getNameInfo().getName());
+    if (!isa<NonTypeTemplateParmDecl>(Node->getDecl())) {
+      SuppressTranslationUnitRAII raii(Policy);
+      AppendScope(Node->getDecl()->getDeclContext(),
+                  OS,
+                  Node->getNameInfo().getName());
+    }
   }
   // <-------------------------------
   if (Node->hasTemplateKeyword())
