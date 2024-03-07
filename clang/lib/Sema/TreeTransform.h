@@ -3624,8 +3624,16 @@ public:
   }
 
   ExprResult RebuildRecoveryExpr(SourceLocation BeginLoc, SourceLocation EndLoc,
+                                 // MODIFIED: BAE@CODEMIND -------->
+                                 Stmt::StmtClass CauseStmtClass,
+                                 Token CauseToken,
+                                 // <-------------------------------
                                  ArrayRef<Expr *> SubExprs, QualType Type) {
-    return getSema().CreateRecoveryExpr(BeginLoc, EndLoc, SubExprs, Type);
+    // MODIFIED: BAE@CODEMIND -------->
+    return getSema().CreateRecoveryExpr(BeginLoc, EndLoc,
+                                        CauseStmtClass, CauseToken,
+                                        SubExprs, Type);
+    // <-------------------------------
   }
 
 private:
@@ -10225,6 +10233,10 @@ ExprResult TreeTransform<Derived>::TransformRecoveryExpr(RecoveryExpr *E) {
   if (!getDerived().AlwaysRebuild() && !Changed)
     return E;
   return getDerived().RebuildRecoveryExpr(E->getBeginLoc(), E->getEndLoc(),
+                                          // MODIFIED: BAE@CODEMIND -------->
+                                          E->getCauseStmtClass(),
+                                          E->getCauseToken(),
+                                          // <-------------------------------
                                           Children, E->getType());
 }
 

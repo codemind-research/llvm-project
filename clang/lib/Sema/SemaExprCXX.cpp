@@ -1404,7 +1404,12 @@ Sema::ActOnCXXTypeConstructExpr(ParsedType TypeRep,
     Result = CorrectDelayedTyposInExpr(Result.get());
   else if (Result.isInvalid())
     Result = CreateRecoveryExpr(TInfo->getTypeLoc().getBeginLoc(),
-                                RParenOrBraceLoc, exprs, Ty);
+                                RParenOrBraceLoc,
+                                // MODIFIED: BAE@CODEMIND -------->
+                                Stmt::StmtClass::CXXConstructExprClass,
+                                Token(),
+                                // <-------------------------------
+                                exprs, Ty);
   return Result;
 }
 
@@ -8357,7 +8362,12 @@ Sema::CorrectDelayedTyposInExpr(Expr *E, VarDecl *InitDecl,
           TyposReplace(Sema &SemaRef) : TreeTransform(SemaRef) {}
           ExprResult TransformTypoExpr(clang::TypoExpr *E) {
             return this->SemaRef.CreateRecoveryExpr(E->getBeginLoc(),
-                                                    E->getEndLoc(), {});
+                                                    E->getEndLoc(),
+                                                    // MODIFIED: BAE@CODEMIND -------->
+                                                    Stmt::StmtClass::TypoExprClass,
+                                                    Token(),
+                                                    // <-------------------------------
+                                                    {});
           }
         } TT(*this);
         return TT.TransformExpr(E);

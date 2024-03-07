@@ -956,6 +956,10 @@ const internal::VariadicDynCastAllOfMatcher<Stmt, PredefinedExpr>
     predefinedExpr;
 const internal::VariadicDynCastAllOfMatcher<Stmt, DesignatedInitExpr>
     designatedInitExpr;
+// MODIFIED: BAE@CODEMIND -------->
+const internal::VariadicDynCastAllOfMatcher<Stmt, RecoveryExpr>
+    recoveryExpr;
+// <-------------------------------
 const internal::VariadicOperatorMatcherFunc<
     2, std::numeric_limits<unsigned>::max()>
     eachOf = {internal::DynTypedMatcher::VO_EachOf};

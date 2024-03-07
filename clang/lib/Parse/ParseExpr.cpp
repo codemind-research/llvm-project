@@ -631,6 +631,10 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
         if (BinOp.isInvalid())
           BinOp = Actions.CreateRecoveryExpr(LHS.get()->getBeginLoc(),
                                              RHS.get()->getEndLoc(),
+                                             // MODIFIED: BAE@CODEMIND -------->
+                                             Stmt::StmtClass::BinaryOperatorClass,
+                                             OpToken,
+                                             // <-------------------------------
                                              {LHS.get(), RHS.get()});
 
         LHS = BinOp;
@@ -646,7 +650,12 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
           else
             Args = {LHS.get(), RHS.get()};
           CondOp = Actions.CreateRecoveryExpr(LHS.get()->getBeginLoc(),
-                                              RHS.get()->getEndLoc(), Args);
+                                              RHS.get()->getEndLoc(),
+                                              // MODIFIED: BAE@CODEMIND -------->
+                                              Stmt::StmtClass::ConditionalOperatorClass,
+                                              Token(),
+                                              // <-------------------------------
+                                              Args);
         }
 
         LHS = CondOp;
@@ -1344,7 +1353,12 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
                                  SavedKind, Arg);
       if (Res.isInvalid())
         Res = Actions.CreateRecoveryExpr(SavedTok.getLocation(),
-                                         Arg->getEndLoc(), Arg);
+                                         Arg->getEndLoc(),
+                                         // MODIFIED: BAE@CODEMIND -------->
+                                         Stmt::StmtClass::UnaryOperatorClass,
+                                         SavedTok,
+                                         // <-------------------------------
+                                         Arg);
     }
     return Res;
   }
@@ -1360,6 +1374,10 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
       Res = Actions.ActOnUnaryOp(getCurScope(), SavedLoc, SavedKind, Arg);
       if (Res.isInvalid())
         Res = Actions.CreateRecoveryExpr(Tok.getLocation(), Arg->getEndLoc(),
+                                         // MODIFIED: BAE@CODEMIND -------->
+                                         Stmt::StmtClass::UnaryOperatorClass,
+                                         Tok,
+                                         // <-------------------------------
                                          Arg);
     }
     return Res;
@@ -1381,7 +1399,12 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
       Expr *Arg = Res.get();
       Res = Actions.ActOnUnaryOp(getCurScope(), SavedLoc, SavedKind, Arg);
       if (Res.isInvalid())
-        Res = Actions.CreateRecoveryExpr(SavedLoc, Arg->getEndLoc(), Arg);
+        Res = Actions.CreateRecoveryExpr(SavedLoc, Arg->getEndLoc(),
+                                         // MODIFIED: BAE@CODEMIND -------->
+                                         Stmt::StmtClass::UnaryOperatorClass,
+                                         Tok,
+                                         // <-------------------------------
+                                         Arg);
     }
     return Res;
   }
@@ -2066,7 +2089,12 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
         if (LHS.isInvalid()) {
           ArgExprs.insert(ArgExprs.begin(), Fn);
           LHS =
-              Actions.CreateRecoveryExpr(Fn->getBeginLoc(), RParLoc, ArgExprs);
+              Actions.CreateRecoveryExpr(Fn->getBeginLoc(), RParLoc,
+                                         // MODIFIED: BAE@CODEMIND -------->
+                                         Stmt::StmtClass::CallExprClass,
+                                         Token(),
+                                         // <-------------------------------
+                                         ArgExprs);
         }
         PT.consumeClose();
       }
@@ -2196,7 +2224,12 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
       } else if (OrigLHS && Name.isValid()) {
         // Preserve the LHS if the RHS is an invalid member.
         LHS = Actions.CreateRecoveryExpr(OrigLHS->getBeginLoc(),
-                                         Name.getEndLoc(), {OrigLHS});
+                                         Name.getEndLoc(),
+                                         // MODIFIED: BAE@CODEMIND -------->
+                                         Stmt::StmtClass::MemberExprClass,
+                                         Token(),
+                                         // <-------------------------------
+                                         {OrigLHS});
       }
       break;
     }
@@ -2208,7 +2241,12 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
                                           Tok.getKind(), Arg);
         if (LHS.isInvalid())
           LHS = Actions.CreateRecoveryExpr(Arg->getBeginLoc(),
-                                           Tok.getLocation(), Arg);
+                                           Tok.getLocation(),
+                                           // MODIFIED: BAE@CODEMIND -------->
+                                           Stmt::StmtClass::UnaryOperatorClass,
+                                           Tok,
+                                           // <-------------------------------
+                                           Arg);
       }
       ConsumeToken();
       break;

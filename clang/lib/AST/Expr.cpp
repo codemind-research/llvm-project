@@ -4636,11 +4636,19 @@ QualType OMPArraySectionExpr::getBaseOriginalType(const Expr *Base) {
 }
 
 RecoveryExpr::RecoveryExpr(ASTContext &Ctx, QualType T, SourceLocation BeginLoc,
-                           SourceLocation EndLoc, ArrayRef<Expr *> SubExprs)
+                           SourceLocation EndLoc,
+                           // MODIFIED: BAE@CODEMIND -------->
+                           Stmt::StmtClass CauseStmtClass,
+                           Token CauseToken,
+                           // <-------------------------------
+                           ArrayRef<Expr *> SubExprs)
     : Expr(RecoveryExprClass, T.getNonReferenceType(),
            T->isDependentType() ? VK_LValue : getValueKindForType(T),
            OK_Ordinary),
-      BeginLoc(BeginLoc), EndLoc(EndLoc), NumExprs(SubExprs.size()) {
+      BeginLoc(BeginLoc), EndLoc(EndLoc), NumExprs(SubExprs.size()),
+      // MODIFIED: BAE@CODEMIND -------->
+      CauseStmtClass(CauseStmtClass), CauseToken(CauseToken) {
+      // <-------------------------------
   assert(!T.isNull());
   assert(llvm::all_of(SubExprs, [](Expr* E) { return E != nullptr; }));
 
@@ -4651,10 +4659,18 @@ RecoveryExpr::RecoveryExpr(ASTContext &Ctx, QualType T, SourceLocation BeginLoc,
 RecoveryExpr *RecoveryExpr::Create(ASTContext &Ctx, QualType T,
                                    SourceLocation BeginLoc,
                                    SourceLocation EndLoc,
+                                   // MODIFIED: BAE@CODEMIND -------->
+                                   Stmt::StmtClass CauseStmtClass,
+                                   Token CauseToken,
+                                   // <-------------------------------
                                    ArrayRef<Expr *> SubExprs) {
   void *Mem = Ctx.Allocate(totalSizeToAlloc<Expr *>(SubExprs.size()),
                            alignof(RecoveryExpr));
-  return new (Mem) RecoveryExpr(Ctx, T, BeginLoc, EndLoc, SubExprs);
+  // MODIFIED: BAE@CODEMIND -------->
+  return new (Mem) RecoveryExpr(Ctx, T, BeginLoc, EndLoc,
+                                CauseStmtClass, CauseToken,
+                                SubExprs);
+  // <-------------------------------
 }
 
 RecoveryExpr *RecoveryExpr::CreateEmpty(ASTContext &Ctx, unsigned NumSubExprs) {

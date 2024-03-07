@@ -12180,7 +12180,12 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init, bool DirectInit) {
       // If the provied initializer fails to initialize the var decl,
       // we attach a recovery expr for better recovery.
       auto RecoveryExpr =
-          CreateRecoveryExpr(Init->getBeginLoc(), Init->getEndLoc(), Args);
+          CreateRecoveryExpr(Init->getBeginLoc(), Init->getEndLoc(),
+                             // MODIFIED: BAE@CODEMIND -------->
+                             Stmt::StmtClass::DeclStmtClass,
+                             Token(),
+                             // <-------------------------------
+                             Args);
       if (RecoveryExpr.get())
         VDecl->setInit(RecoveryExpr.get());
       return;
@@ -12752,7 +12757,12 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl) {
       // If default-init fails, attach a recovery-expr initializer to track
       // that initialization was attempted and failed.
       auto RecoveryExpr =
-          CreateRecoveryExpr(Var->getLocation(), Var->getLocation(), {});
+          CreateRecoveryExpr(Var->getLocation(), Var->getLocation(),
+                             // MODIFIED: BAE@CODEMIND -------->
+                             Stmt::StmtClass::DeclStmtClass,
+                             Token(),
+                             // <-------------------------------
+                             {});
       if (RecoveryExpr.get())
         Var->setInit(RecoveryExpr.get());
     }

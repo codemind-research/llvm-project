@@ -13143,7 +13143,12 @@ static ExprResult FinishOverloadedCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
   // Overload resolution failed, try to recover.
   SmallVector<Expr *, 8> SubExprs = {Fn};
   SubExprs.append(Args.begin(), Args.end());
-  return SemaRef.CreateRecoveryExpr(Fn->getBeginLoc(), RParenLoc, SubExprs,
+  return SemaRef.CreateRecoveryExpr(Fn->getBeginLoc(), RParenLoc,
+                                    // MODIFIED: BAE@CODEMIND -------->
+                                    Stmt::StmtClass::UnresolvedLookupExprClass,
+                                    Token(),
+                                    // <-------------------------------
+                                    SubExprs,
                                     chooseRecoveryType(*CandidateSet, Best));
 }
 
@@ -14217,7 +14222,12 @@ ExprResult Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
       return ExprError();
     std::vector<Expr *> SubExprs = {MemExprE};
     llvm::for_each(Args, [&SubExprs](Expr *E) { SubExprs.push_back(E); });
-    return CreateRecoveryExpr(MemExprE->getBeginLoc(), RParenLoc, SubExprs,
+    return CreateRecoveryExpr(MemExprE->getBeginLoc(), RParenLoc,
+                              // MODIFIED: BAE@CODEMIND -------->
+                              Stmt::StmtClass::UnresolvedMemberExprClass,
+                              Token(),
+                              // <-------------------------------
+                              SubExprs,
                               Type);
   };
   if (isa<CXXPseudoDestructorExpr>(NakedMemExpr))
