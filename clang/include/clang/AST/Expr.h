@@ -27,6 +27,7 @@
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/SyncScope.h"
 #include "clang/Basic/TypeTraits.h"
+#include "clang/Lex/Token.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/SmallVector.h"
@@ -6338,6 +6339,10 @@ class RecoveryExpr final : public Expr,
 public:
   static RecoveryExpr *Create(ASTContext &Ctx, QualType T,
                               SourceLocation BeginLoc, SourceLocation EndLoc,
+                              // MODIFIED: BAE@CODEMIND -------->
+                              StmtClass CauseStmtClass,
+                              Token CauseToken,
+                              // <-------------------------------
                               ArrayRef<Expr *> SubExprs);
   static RecoveryExpr *CreateEmpty(ASTContext &Ctx, unsigned NumSubExprs);
 
@@ -6362,9 +6367,27 @@ public:
     return T->getStmtClass() == RecoveryExprClass;
   }
 
+  // MODIFIED: BAE@CODEMIND -------->
+  void setCauseStmtClass(StmtClass StmtClass) {
+    CauseStmtClass = StmtClass;
+  };
+
+  void setCauseToken(Token Token) {
+    CauseToken = Token;
+  }
+
+  StmtClass getCauseStmtClass() const { return CauseStmtClass; }
+  Token getCauseToken() const { return CauseToken; }
+  // <-------------------------------
 private:
-  RecoveryExpr(ASTContext &Ctx, QualType T, SourceLocation BeginLoc,
-               SourceLocation EndLoc, ArrayRef<Expr *> SubExprs);
+  RecoveryExpr(ASTContext &Ctx, QualType T,
+               SourceLocation BeginLoc,
+               SourceLocation EndLoc,
+               // MODIFIED: BAE@CODEMIND -------->
+               StmtClass CauseStmtClass,
+               Token CauseToken,
+               // <-------------------------------
+               ArrayRef<Expr *> SubExprs);
   RecoveryExpr(EmptyShell Empty, unsigned NumSubExprs)
       : Expr(RecoveryExprClass, Empty), NumExprs(NumSubExprs) {}
 
@@ -6372,6 +6395,10 @@ private:
 
   SourceLocation BeginLoc, EndLoc;
   unsigned NumExprs;
+  // MODIFIED: BAE@CODEMIND -------->
+  StmtClass CauseStmtClass;
+  Token CauseToken;
+  // <-------------------------------
   friend TrailingObjects;
   friend class ASTStmtReader;
   friend class ASTStmtWriter;

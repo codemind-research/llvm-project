@@ -2623,6 +2623,17 @@ extern const internal::VariadicDynCastAllOfMatcher<Stmt, PredefinedExpr>
 extern const internal::VariadicDynCastAllOfMatcher<Stmt, DesignatedInitExpr>
     designatedInitExpr;
 
+// MODIFIED: BAE@CODEMIND -------->
+/// Matches any error expressions
+///
+/// Example: Matches error expression
+/// \code
+///   int val = (int *)ptr;
+/// \endcode
+extern const internal::VariadicDynCastAllOfMatcher<Stmt, RecoveryExpr>
+    recoveryExpr;
+// <-------------------------------
+
 /// Matches designated initializer expressions that contain
 /// a specific number of designators.
 ///

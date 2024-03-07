@@ -212,6 +212,9 @@ RegistryMaps::RegistryMaps() {
   REGISTER_MATCHER(defaultStmt);
   REGISTER_MATCHER(dependentSizedArrayType);
   REGISTER_MATCHER(designatedInitExpr);
+  // MODIFIED: BAE@CODEMIND -------->
+  REGISTER_MATCHER(recoveryExpr);
+  // <-------------------------------
   REGISTER_MATCHER(designatorCountIs);
   REGISTER_MATCHER(doStmt);
   REGISTER_MATCHER(eachOf);

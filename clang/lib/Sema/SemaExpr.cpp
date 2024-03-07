@@ -18707,6 +18707,10 @@ Sema::ConditionResult Sema::ActOnCondition(Scope *S, SourceLocation Loc,
   }
   if (Cond.isInvalid()) {
     Cond = CreateRecoveryExpr(SubExpr->getBeginLoc(), SubExpr->getEndLoc(),
+                              // MODIFIED: BAE@CODEMIND -------->
+                              Stmt::StmtClass::IfStmtClass,
+                              Token(),
+                              // <-------------------------------
                               {SubExpr});
     if (!Cond.get())
       return ConditionError();
@@ -19429,6 +19433,10 @@ ExprResult Sema::ActOnObjCAvailabilityCheckExpr(
 }
 
 ExprResult Sema::CreateRecoveryExpr(SourceLocation Begin, SourceLocation End,
+                                    // MODIFIED: BAE@CODEMIND -------->
+                                    Stmt::StmtClass CauseStmtClass,
+                                    Token CauseToken,
+                                    // <-------------------------------
                                     ArrayRef<Expr *> SubExprs, QualType T) {
   if (!Context.getLangOpts().RecoveryAST)
     return ExprError();
@@ -19439,5 +19447,8 @@ ExprResult Sema::CreateRecoveryExpr(SourceLocation Begin, SourceLocation End,
   if (T.isNull() || !Context.getLangOpts().RecoveryASTType)
     // We don't know the concrete type, fallback to dependent type.
     T = Context.DependentTy;
-  return RecoveryExpr::Create(Context, T, Begin, End, SubExprs);
+  // MODIFIED: BAE@CODEMIND -------->
+  return RecoveryExpr::Create(Context, T, Begin, End,
+                              CauseStmtClass, CauseToken, SubExprs);
+  // <-------------------------------
 }
